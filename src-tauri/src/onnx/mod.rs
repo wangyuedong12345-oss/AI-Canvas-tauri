@@ -73,15 +73,21 @@ pub fn models_dir() -> Result<PathBuf, String> {
     let parent = exe.parent().ok_or("无法解析安装目录".to_string())?;
     let install_models = parent.join("models");
 
+    // 1. 安装目录下已存在 models/ 目录（打包后预置模型）→ 直接使用
+    if install_models.is_dir() {
+        return Ok(install_models);
+    }
+
+    // 2. 安装目录可写（开发模式）→ 创建并用于下载
     if is_dir_writable(&install_models) {
         return Ok(install_models);
     }
 
+    // 3. 回退到 %LOCALAPPDATA%/com.aicanvas.app/models 用于下载
     let app_data = app_data_models_dir()?;
     std::fs::create_dir_all(&app_data).map_err(|e| format!("创建 AppData 模型目录失败: {e}"))?;
     Ok(app_data)
 }
-
 fn app_data_models_dir() -> Result<PathBuf, String> {
     let local_app_data = std::env::var("LOCALAPPDATA")
         .or_else(|_| std::env::var("APPDATA"))
