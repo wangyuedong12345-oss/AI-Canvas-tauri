@@ -40,41 +40,10 @@ export default function Header() {
     >
       {/* Logo */}
       <div className="flex items-center gap-2 pr-1">
-        <div className="w-6 h-6 rounded-md bg-gradient-to-br to-purple-600 flex items-center justify-center shrink-0">
-          <svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <defs>
-              <linearGradient id="iconGradient" x1="200" y1="200" x2="824" y2="824" gradientUnits="userSpaceOnUse">
-                <stop offset="0%" stopColor="#4196FF" />
-                <stop offset="50%" stopColor="#A259FF" />
-                <stop offset="100%" stopColor="#FF5D70" />
-              </linearGradient>
-
-              <filter id="shadow" x="0" y="0" width="100%" height="100%" filterUnits="userSpaceOnUse">
-                <feDropShadow dx="0" dy="20" stdDeviation="30" floodOpacity="0.1" />
-              </filter>
-            </defs>
-
-            <path d="M512 0C900 0 1024 124 1024 512C1024 900 900 1024 512 1024C124 1024 0 900 0 512C0 124 124 0 512 0Z" fill="white" filter="url(#shadow)" />
-
-            <path d="M512 2C900 2 1022 124 1022 512C1022 900 900 1022 512 1022C124 1022 2 900 2 512C2 124 124 2 512 2Z" stroke="black" strokeOpacity="0.05" strokeWidth="2" />
-
-            <g transform="translate(512, 512) scale(1.4)">
-              <path d="M0 -260 
-             C15 -120 120 -15 260 0 
-             C120 15 15 120 0 260 
-             C-15 120 -120 15 -260 0 
-             C-120 -15 -15 -120 0 -260Z"
-                fill="url(#iconGradient)" />
-
-              <circle r="45" fill="white" />
-
-              <circle cx="0" cy="-120" r="12" fill="white" opacity="0.8" />
-              <circle cx="104" cy="60" r="12" fill="white" opacity="0.8" />
-              <circle cx="-104" cy="60" r="12" fill="white" opacity="0.8" />
-            </g>
-          </svg>
+        <div className="w-6 h-6 rounded-md bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center shrink-0">
+          <img src="/logo.svg" alt="ZeroFrame" className="w-full h-full" />
         </div>
-        <span className="text-[11px] font-semibold text-canvas-text/90">AI Canvas</span>
+        <span className="text-[11px] font-semibold text-canvas-text/90">ZeroFrame</span>
       </div>
 
       {/* Divider */}
