@@ -148,6 +148,24 @@ export * from './fs/externalEditors';
  * 同步用户明确选择的文件目录白名单。
  * 仅保存根目录和素材文件夹可进入；ComfyUI 等其他配置路径不得传入。
  */
+
+/** Derive correct file extension from data URL MIME type */
+function extFromDataUrlMime(dataUrl: string): string {
+  const mimeMap: Record<string, string> = {
+    'image/png': '.png',
+    'image/jpeg': '.jpg',
+    'image/webp': '.webp',
+    'image/gif': '.gif',
+    'image/bmp': '.bmp',
+    'image/avif': '.avif',
+  };
+  const mime = dataUrl.match(/^data:((?:image|application)\/[\w.-]+);base64,/);
+  if (mime) {
+    const ext = mimeMap[mime[1]];
+    if (ext) return ext;
+  }
+  return '.png';
+}
 export async function syncAuthorizedDirectories(config: {
   baseDataDir?: string;
   assetFolders?: string[];
@@ -323,7 +341,11 @@ export async function saveDataUrlToProjectData(
       bytes = new Uint8Array(buffer);
     }
 
-    const destPath = await resolveUniqueDestPath(dataDir, fileName);
+    // Derive correct extension from data URL MIME type to avoid Rust decode failures
+    const ext = extFromDataUrlMime(dataUrl);
+    const safeName = fileName.replace(/.[^.]+$/, '') + ext;
+
+    const destPath = await resolveUniqueDestPath(dataDir, safeName);
     await writeFile(destPath, bytes);
     notifyProjectDiskChanged();
 
