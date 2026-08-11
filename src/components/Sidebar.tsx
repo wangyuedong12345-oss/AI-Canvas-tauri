@@ -465,12 +465,12 @@ function AvatarMenu() {
 
       {/* About dialog — portal to body to escape aside containing block */}
       {createPortal(
-        <ModalOverlay
-          isOpen={aboutOpen}
-          onClose={() => setAboutOpen(false)}
-          ariaLabel={t('关于 AI Canvas')}
-          className="w-[420px] max-h-[85vh] overflow-y-auto"
-        >
+          <ModalOverlay
+            isOpen={aboutOpen}
+            onClose={() => setAboutOpen(false)}
+          ariaLabel={t('关于 ZeroFrame')}
+            className="w-[420px] max-h-[85vh] overflow-y-auto"
+          >
         <div className="p-3 space-y-3">
           {/* Header */}
           <div className="flex items-center gap-4">
@@ -478,7 +478,7 @@ function AvatarMenu() {
               <img src="/icons.svg" alt="" />
             </div>
             <div>
-              <h2 className="text-lg font-semibold text-canvas-text">AI Canvas</h2>
+              <h2 className="text-lg font-semibold text-canvas-text">ZeroFrame</h2>
               <p className="text-xs text-canvas-text-secondary">v{appVersion} · {t('开发预览版')}</p>
               <button
                 onClick={updateStatus === 'available' ? handleDownloadUpdate : handleCheckUpdate}
@@ -510,7 +510,7 @@ function AvatarMenu() {
 
           {/* Description */}
           <p className="text-sm text-canvas-text-secondary leading-relaxed">
-            {t('AI Canvas 是一个智能多媒体创意画布，通过可视化节点编排的方式，调用多种 AI 模型来生成文本、图像、视频和音频内容。支持多厂商模型接入、ComfyUI 工作流、本地文件管理与实时协作。')}
+            {t('ZeroFrame 是一个智能多媒体创意画布，通过可视化节点编排的方式，调用多种 AI 模型来生成文本、图像、视频和音频内容。支持多厂商模型接入、ComfyUI 工作流、本地文件管理与实时协作。')}
           </p>
 
           {/* Feature list */}
@@ -583,7 +583,7 @@ function AvatarMenu() {
 
           {/* Footer */}
           <div className="pt-2 flex items-center justify-between border-t border-canvas-border">
-            <span className="text-[11px] text-canvas-text-muted">© 2026 AI Canvas Team</span>
+            <span className="text-[11px] text-canvas-text-muted">© 2026 ZeroFrame Team</span>
             <AnimatedButton
               type="button"
               className="px-3 py-1.5 text-xs font-medium text-canvas-text bg-canvas-hover hover:bg-canvas-border rounded-lg transition-colors"

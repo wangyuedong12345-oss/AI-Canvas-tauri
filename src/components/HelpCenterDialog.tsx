@@ -533,7 +533,7 @@ export default function HelpCenterDialog({ onClose }: HelpCenterDialogProps) {
         <ModalOverlay
           isOpen
           onClose={onClose}
-          ariaLabel="AI Canvas 使用帮助"
+          ariaLabel="ZeroFrame 使用帮助"
           className="help-dialog h-[min(620px,calc(100vh-24px))] w-[min(760px,calc(100vw-24px))]"
         >
           <div className="flex min-h-0 flex-1 flex-col">

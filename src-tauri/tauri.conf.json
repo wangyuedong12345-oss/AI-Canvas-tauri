@@ -5,7 +5,7 @@
         "beforeBuildCommand": "npm run build && npm run build:mcp-adapter",
         "frontendDist": "../dist"
     },
-    "productName": "AI Canvas",
+    "productName": "ZeroFrame",
     "version": "0.8.16",
     "identifier": "com.aicanvas.app",
     "plugins": {
@@ -59,7 +59,7 @@
         },
         "windows": [
             {
-                "title": "AI Canvas",
+                "title": "ZeroFrame",
                 "width": 1420,
                 "height": 900,
                 "minWidth": 1000,

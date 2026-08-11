@@ -463,7 +463,7 @@ export function buildAssistantSystemPrompt(
   const subAgentCatalog = options.agentTools ? buildSubAgentCatalogPrompt() : '';
 
   const context = [
-    `AI Canvas 画布助手`,
+    `ZeroFrame 画布助手`,
     `项目: ${store.currentProjectId ?? 'unknown'}`,
     `节点总数: ${nodes.length} | 连线: ${store.edges.length}`,
     `选中节点: ${store.selectedNodeIds.length > 0 ? store.selectedNodeIds.join(', ') : '无'}`,

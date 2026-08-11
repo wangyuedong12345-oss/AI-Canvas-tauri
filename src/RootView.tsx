@@ -22,7 +22,7 @@ const VIEW_LABELS: Record<string, string> = {
 };
 
 export default function RootView({ view }: RootViewProps) {
-  const viewLabel = (view && VIEW_LABELS[view]) || 'AI Canvas';
+  const viewLabel = (view && VIEW_LABELS[view]) || 'ZeroFrame';
 
   return (
     <>

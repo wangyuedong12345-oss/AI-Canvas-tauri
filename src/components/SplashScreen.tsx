@@ -268,7 +268,7 @@ export default function SplashScreen({ onComplete }: SplashScreenProps) {
       data-tauri-drag-region
       ref={containerRef}
       role="status"
-      aria-label="AI Canvas 正在启动"
+      aria-label="ZeroFrame 正在启动"
       className="fixed inset-0 z-[9999] select-none overflow-hidden flex items-center justify-center bg-black rounded-[16px]"
     >
       {/* 宇宙微尘 */}
@@ -335,7 +335,7 @@ export default function SplashScreen({ onComplete }: SplashScreenProps) {
               letterSpacing: '0.3em',
             }}
           >
-            AI Canvas
+            ZeroFrame
           </span>
         </div>
       </div>
