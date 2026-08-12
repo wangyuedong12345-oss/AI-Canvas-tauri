@@ -131,7 +131,7 @@ const FIT_VIEW_OPTIONS = { padding: 0.2, maxZoom: 1 };
 const PRO_OPTIONS = { hideAttribution: true };
 const PAN_ON_DRAG_DEFAULT = [1, 2]; // 默认交互：右键(2) + 中键(1) 拖拽平移
 const PAN_ON_DRAG_CLASSIC = [0];    // 传统交互：左键(0) 拖拽平移
-const DEFAULT_EDGE_STYLE = { stroke: 'var(--canvas-edge)', strokeWidth: 1.5 };
+const DEFAULT_EDGE_STYLE: { stroke: string; strokeWidth: number } = { stroke: 'var(--canvas-edge)', strokeWidth: 1.5 };
 const isTauri = typeof window !== 'undefined' && '__TAURI__' in window;
 const isMacOS = typeof navigator !== 'undefined'
   && /Macintosh|Mac OS X/.test(navigator.userAgent);
@@ -945,6 +945,7 @@ function CanvasInner() {
       return {
         ...edge,
         type: 'scissor-hover',
+        style: edge.style ?? DEFAULT_EDGE_STYLE,
         data: {
           ...edge.data,
           baseEdgeType,
