@@ -1,5 +1,5 @@
 /**
- * Canvas 画布主组件 — React Flow 画布核心，管理节点/边渲染、拖放、连线、右键菜单、空状态
+ * Canvas 鐢诲竷涓荤粍浠?鈥?React Flow 鐢诲竷鏍稿績锛岀鐞嗚妭鐐?杈规覆鏌撱€佹嫋鏀俱€佽繛绾裤€佸彸閿彍鍗曘€佺┖鐘舵€?
  */
 import { lazy, Suspense, useCallback, useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
@@ -45,7 +45,7 @@ import RoundedMiniMapMask from './canvas/RoundedMiniMapMask';
 import MultiSelectToolbar from './canvas/MultiSelectToolbar';
 import CanvasEmptyState from './canvas/CanvasEmptyState';
 import HistoryTimelinePanel from './canvas/HistoryTimelinePanel';
-import SelectedNodeFlowEdge from './canvas/SelectedNodeFlowEdge';
+import ScissorHoverEdge from './canvas/ScissorHoverEdge';
 import CanvasRadialMenu, { CanvasLongPressIndicator } from './canvas/CanvasRadialMenu';
 import { useConnectionDropMenu } from '../hooks/useConnectionDropMenu';
 import { useCanvasContextMenu } from '../hooks/useCanvasContextMenu';
@@ -68,13 +68,13 @@ import {
   type CanvasPanByDetail,
 } from '../services/canvasViewportService';
 
-// 懒加载：全景节点引入 three（体积大户），画布上出现全景节点时才加载
+// 鎳掑姞杞斤細鍏ㄦ櫙鑺傜偣寮曞叆 three锛堜綋绉ぇ鎴凤級锛岀敾甯冧笂鍑虹幇鍏ㄦ櫙鑺傜偣鏃舵墠鍔犺浇
 const PanoramaNodeLazy = lazy(() => import('./nodes/PanoramaNode'));
 function PanoramaNode(props: { id: string; data: BaseNodeData; selected?: boolean }) {
   return <Suspense fallback={null}><PanoramaNodeLazy {...props} /></Suspense>;
 }
 
-// 懒加载：3D 导演台节点按需连接本地 Tauri 独立窗口
+// 鎳掑姞杞斤細3D 瀵兼紨鍙拌妭鐐规寜闇€杩炴帴鏈湴 Tauri 鐙珛绐楀彛
 const DirectorDeskNodeLazy = lazy(() => import('./nodes/DirectorDeskNode'));
 function DirectorDeskNode(props: { id: string; data: BaseNodeData; selected?: boolean }) {
   return <Suspense fallback={null}><DirectorDeskNodeLazy {...props} /></Suspense>;
@@ -82,11 +82,11 @@ function DirectorDeskNode(props: { id: string; data: BaseNodeData; selected?: bo
 
 const CharacterAssetDialog = lazy(() => import('./CharacterAssetDialog'));
 
-// ── Node types mapping ──
+// 鈹€鈹€ Node types mapping 鈹€鈹€
 /**
- * 给每个节点组件包一层错误边界：单个节点渲染抛错（脏数据、导入文件、旧版迁移残留）
- * 只降级成一张占位卡，画布其余部分继续可用。
- * 只在模块顶层调用一次 —— React Flow 要求 nodeTypes 与其中的组件身份保持稳定。
+ * 缁欐瘡涓妭鐐圭粍浠跺寘涓€灞傞敊璇竟鐣岋細鍗曚釜鑺傜偣娓叉煋鎶涢敊锛堣剰鏁版嵁銆佸鍏ユ枃浠躲€佹棫鐗堣縼绉绘畫鐣欙級
+ * 鍙檷绾ф垚涓€寮犲崰浣嶅崱锛岀敾甯冨叾浣欓儴鍒嗙户缁彲鐢ㄣ€?
+ * 鍙湪妯″潡椤跺眰璋冪敤涓€娆?鈥斺€?React Flow 瑕佹眰 nodeTypes 涓庡叾涓殑缁勪欢韬唤淇濇寔绋冲畾銆?
  */
 function withNodeRenderBoundaries(types: NodeTypes): NodeTypes {
   return Object.fromEntries(Object.entries(types).map(([typeName, NodeComponent]) => {
@@ -122,11 +122,11 @@ const nodeTypes: NodeTypes = withNodeRenderBoundaries({
 });
 
 const edgeTypes: EdgeTypes = {
-  'selected-node-flow': SelectedNodeFlowEdge,
+    'scissor-hover': ScissorHoverEdge,
 };
 
-// ── Stable ReactFlow props (hoisted to avoid new identities every render,
-//    which makes React Flow re-run internal effects and drop frames on drag) ──
+// 鈹€鈹€ Stable ReactFlow props (hoisted to avoid new identities every render,
+//    which makes React Flow re-run internal effects and drop frames on drag) 鈹€鈹€
 const FIT_VIEW_OPTIONS = { padding: 0.2, maxZoom: 1 };
 const PRO_OPTIONS = { hideAttribution: true };
 const PAN_ON_DRAG_DEFAULT = [1, 2]; // 默认交互：右键(2) + 中键(1) 拖拽平移
@@ -142,7 +142,7 @@ const NODE_TOOLBAR_MIN_SCREEN_SCALE = 0.8;
 const NODE_TOOLBAR_MAX_SCREEN_SCALE = 1.25;
 const NODE_TOOLBAR_SCALE_EPSILON = 0.0005;
 
-// ── 交互模式预设（冻结对象，避免每次 render 产生新身份，导致 React Flow 内部 effect 重跑、拖拽掉帧）──
+// 鈹€鈹€ 浜や簰妯″紡棰勮锛堝喕缁撳璞★紝閬垮厤姣忔 render 浜х敓鏂拌韩浠斤紝瀵艰嚧 React Flow 鍐呴儴 effect 閲嶈窇銆佹嫋鎷芥帀甯э級鈹€鈹€
 const DEFAULT_INTERACTION = Object.freeze({
   panOnScroll: shouldUseMacTrackpadPan,
   zoomOnScroll: !shouldUseMacTrackpadPan,
@@ -156,15 +156,15 @@ const DEFAULT_INTERACTION = Object.freeze({
 
 const CLASSIC_INTERACTION = Object.freeze({
   panOnScroll: true,
-  panOnScrollMode: PanOnScrollMode.Free, // Free 才能兼顾 Shift+滚轮水平平移与普通滚轮垂直平移
+  panOnScrollMode: PanOnScrollMode.Free, // Free 鎵嶈兘鍏奸【 Shift+婊氳疆姘村钩骞崇Щ涓庢櫘閫氭粴杞瀭鐩村钩绉?
   panOnScrollSpeed: 0.5,
   zoomOnScroll: false,
   zoomOnPinch: true,
-  zoomOnDoubleClick: false, // 关闭双击缩放，避免与「双击空白创建文本节点」冲突
-  zoomActivationKeyCode: 'Control', // Ctrl+滚轮缩放
+  zoomOnDoubleClick: false, // 鍏抽棴鍙屽嚮缂╂斁锛岄伩鍏嶄笌銆屽弻鍑荤┖鐧藉垱寤烘枃鏈妭鐐广€嶅啿绐?
+  zoomActivationKeyCode: 'Control', // Ctrl+婊氳疆缂╂斁
   panOnDrag: PAN_ON_DRAG_CLASSIC,
   selectionOnDrag: false,
-  selectionKeyCode: 'Shift', // Shift+左键拖拽 → 框选
+  selectionKeyCode: 'Shift', // Shift+宸﹂敭鎷栨嫿 鈫?妗嗛€?
   multiSelectionKeyCode: 'Shift',
   selectionMode: SelectionMode.Partial,
   deleteKeyCode: null,
@@ -199,7 +199,7 @@ const minimapNodeColor = (node: RFNode) => {
   }
 };
 
-// ── Snap lines overlay ──
+// 鈹€鈹€ Snap lines overlay 鈹€鈹€
 type SpacingSnapLine = Extract<SnapLine, { kind: 'spacing' }>;
 
 function formatSpacingDistance(distance: number): string {
@@ -382,7 +382,7 @@ function CanvasInner() {
   const interactionMode = useAppStore((s) => s.config.interactionMode ?? 'default');
   const canvasNoteToolbarVisible = useAppStore((s) => s.config.canvasNoteToolbarVisible !== false);
   const interaction = interactionMode === 'classic' ? CLASSIC_INTERACTION : DEFAULT_INTERACTION;
-  // 右键 effect 用 ref 读取模式，避免把 interactionMode 加进 effect 依赖而导致监听器重挂
+  // 鍙抽敭 effect 鐢?ref 璇诲彇妯″紡锛岄伩鍏嶆妸 interactionMode 鍔犺繘 effect 渚濊禆鑰屽鑷寸洃鍚櫒閲嶆寕
   const interactionModeRef = useRef(interactionMode);
   useEffect(() => {
     interactionModeRef.current = interactionMode;
@@ -484,8 +484,8 @@ function CanvasInner() {
     });
   }, [updateNodeToolbarScale]);
 
-  // 节点进场动画（translateY）会让 React Flow 在挂载瞬间测得偏移的 handle 锚点并缓存，
-  // 导致连线起止点错位。进场动画结束（落位 translateY:0）后重新测量该节点的 handle。
+  // 鑺傜偣杩涘満鍔ㄧ敾锛坱ranslateY锛変細璁?React Flow 鍦ㄦ寕杞界灛闂存祴寰楀亸绉荤殑 handle 閿氱偣骞剁紦瀛橈紝
+  // 瀵艰嚧杩炵嚎璧锋鐐归敊浣嶃€傝繘鍦哄姩鐢荤粨鏉燂紙钀戒綅 translateY:0锛夊悗閲嶆柊娴嬮噺璇ヨ妭鐐圭殑 handle銆?
   useEffect(() => {
     const onAnimEnd = (e: AnimationEvent) => {
       if (e.animationName !== 'nodeIn') return;
@@ -543,12 +543,12 @@ function CanvasInner() {
       panOnDrag: false,
       selectionOnDrag: false,
     } : {}),
-    // React Flow 会忽略变回 undefined 的受控属性，因此结束绘图时必须显式恢复。
+    // React Flow 浼氬拷鐣ュ彉鍥?undefined 鐨勫彈鎺у睘鎬э紝鍥犳缁撴潫缁樺浘鏃跺繀椤绘樉寮忔仮澶嶃€?
     nodesDraggable: !drawingActive,
     elementsSelectable: !drawingActive,
   }), [drawingActive, interaction]);
 
-  // ── UI toggles (persisted to localStorage) ──
+  // 鈹€鈹€ UI toggles (persisted to localStorage) 鈹€鈹€
   const [showGrid, setShowGrid] = useState(() => localStorage.getItem('canvas-showGrid') !== 'false');
   const [smoothLine, setSmoothLine] = useState(() => localStorage.getItem('canvas-smoothLine') !== 'false');
 
@@ -585,7 +585,7 @@ function CanvasInner() {
 
   const toggleGrid = useCallback(() => setShowGrid((v) => !v), []);
 
-  // ── Connection drop menu ──
+  // 鈹€鈹€ Connection drop menu 鈹€鈹€
   const {
     menu: connectionMenu,
     menuRef: connectionMenuRef,
@@ -595,7 +595,7 @@ function CanvasInner() {
     sourceNode,
   } = useConnectionDropMenu(smoothLine);
 
-  // ── Node context menu ──
+  // 鈹€鈹€ Node context menu 鈹€鈹€
   const {
     menu: nodeCtxMenu,
     menuRef: nodeCtxMenuRef,
@@ -639,7 +639,7 @@ function CanvasInner() {
     ? nodes.find((n) => n.id === nodeCtxMenu.nodeId && n.type === 'group') != null
     : false;
 
-  // ── Canvas context menu ──
+  // 鈹€鈹€ Canvas context menu 鈹€鈹€
   const {
     menu: ctxMenu,
     menuRef: ctxMenuRef,
@@ -667,7 +667,7 @@ function CanvasInner() {
     openCanvasMenu: openCtxMenu,
   });
 
-  // ── External clipboard paste (native paste event → DataTransfer) ──
+  // 鈹€鈹€ External clipboard paste (native paste event 鈫?DataTransfer) 鈹€鈹€
   useEffect(() => {
     const handler = (e: ClipboardEvent) => {
       // Skip if user is editing an input
@@ -687,7 +687,7 @@ function CanvasInner() {
     return () => window.removeEventListener('paste', handler, true);
   }, [reactFlowInstance]);
 
-  // ── Fit view event (project switch / F key) ──
+  // 鈹€鈹€ Fit view event (project switch / F key) 鈹€鈹€
   useEffect(() => {
     const handler = () => {
       // Wait one frame for React to finish rendering new nodes/edges
@@ -699,7 +699,7 @@ function CanvasInner() {
     return () => window.removeEventListener('canvas-fit-view', handler);
   }, [reactFlowInstance]);
 
-  // ── Keep anchored overlays visible by panning the whole canvas ──
+  // 鈹€鈹€ Keep anchored overlays visible by panning the whole canvas 鈹€鈹€
   useEffect(() => {
     const handler = (event: Event) => {
       const detail = (event as CustomEvent<CanvasPanByDetail>).detail;
@@ -748,7 +748,7 @@ function CanvasInner() {
     };
   }, [reactFlowInstance]);
 
-  // ── Focus node events (history / Agent-created node batch) ──
+  // 鈹€鈹€ Focus node events (history / Agent-created node batch) 鈹€鈹€
   useEffect(() => {
     const scheduledFrames = new Set<number>();
     const focusNodes = (
@@ -798,7 +798,7 @@ function CanvasInner() {
     };
   }, [reactFlowInstance]);
 
-  // ── Node click → AI dialog ──
+  // 鈹€鈹€ Node click 鈫?AI dialog 鈹€鈹€
   const openNodeDialog = useAppStore((s) => s.openNodeDialog);
   const inlineEditClickTimerRef = useRef<number | null>(null);
   const openDialogForNode = useCallback(
@@ -833,7 +833,7 @@ function CanvasInner() {
         && node.data?.type === 'ai-text'
         && node.data?.role !== 'source';
       if (isEmptyTextEditTrigger) {
-        // 第一次点击先让 React Flow 完成选中；第二次点击会取消弹窗并交给 TextNode 的双击编辑。
+        // 绗竴娆＄偣鍑诲厛璁?React Flow 瀹屾垚閫変腑锛涚浜屾鐐瑰嚮浼氬彇娑堝脊绐楀苟浜ょ粰 TextNode 鐨勫弻鍑荤紪杈戙€?
         if (e.detail > 1) return;
         inlineEditClickTimerRef.current = window.setTimeout(() => {
           inlineEditClickTimerRef.current = null;
@@ -859,25 +859,25 @@ function CanvasInner() {
     [openDialogForNode],
   );
 
-  // ── Selection sync ──
+  // 鈹€鈹€ Selection sync 鈹€鈹€
   const onSelectionChange = useCallback(
     (changes: OnSelectionChangeParams) => {
       const sel = changes.nodes;
       const nonGroup = sel.filter((n) => n.type !== 'group');
-      // 框选忽略分组节点：与其它节点一同被选中时，store 选区剔除分组（删除/分组不波及容器）；
-      // 单独点击分组仍保留（便于删除/解散）。RF 视觉去选在 onSelectionEnd 处理。
+      // 妗嗛€夊拷鐣ュ垎缁勮妭鐐癸細涓庡叾瀹冭妭鐐逛竴鍚岃閫変腑鏃讹紝store 閫夊尯鍓旈櫎鍒嗙粍锛堝垹闄?鍒嗙粍涓嶆尝鍙婂鍣級锛?
+      // 鍗曠嫭鐐瑰嚮鍒嗙粍浠嶄繚鐣欙紙渚夸簬鍒犻櫎/瑙ｆ暎锛夈€俁F 瑙嗚鍘婚€夊湪 onSelectionEnd 澶勭悊銆?
       const next = nonGroup.length > 0 ? nonGroup : sel;
       setSelectedNodeIds(next.map((n) => n.id));
     },
     [setSelectedNodeIds],
   );
 
-  // 框选结束后：若分组节点与其它节点一同被框中，取消分组节点的选中，避免随后被一起拖动
+  // 妗嗛€夌粨鏉熷悗锛氳嫢鍒嗙粍鑺傜偣涓庡叾瀹冭妭鐐逛竴鍚岃妗嗕腑锛屽彇娑堝垎缁勮妭鐐圭殑閫変腑锛岄伩鍏嶉殢鍚庤涓€璧锋嫋鍔?
   const onSelectionEnd = useCallback(() => {
     clearGroupedSelection();
   }, [clearGroupedSelection]);
 
-  // ── Node snap ──
+  // 鈹€鈹€ Node snap 鈹€鈹€
   const {
     snapLines,
     onNodeDragStart,
@@ -888,13 +888,13 @@ function CanvasInner() {
     onResizeStop,
   } = useNodeSnap();
 
-  // 缩放吸附桥接：稳定引用透传给节点内的 ResizeHandle（经 Context）
+  // 缂╂斁鍚搁檮妗ユ帴锛氱ǔ瀹氬紩鐢ㄩ€忎紶缁欒妭鐐瑰唴鐨?ResizeHandle锛堢粡 Context锛?
   const resizeSnapApi = useMemo(
     () => ({ onResizeStart, applyResizeSnap, onResizeStop }),
     [onResizeStart, applyResizeSnap, onResizeStop],
   );
 
-  // 按住 Ctrl/⌘ 开始拖拽 → 在原位复制一个节点（拖动的仍是原节点，等于"拖出一个副本"）
+  // 鎸変綇 Ctrl/鈱?寮€濮嬫嫋鎷?鈫?鍦ㄥ師浣嶅鍒朵竴涓妭鐐癸紙鎷栧姩鐨勪粛鏄師鑺傜偣锛岀瓑浜?鎷栧嚭涓€涓壇鏈?锛?
   const handleNodeDragStart = useCallback(
     (evt: React.MouseEvent, node: RFNode<BaseNodeData>) => {
       setCanvasInteraction('node', true);
@@ -907,7 +907,7 @@ function CanvasInner() {
     [commitToHistory, duplicateNode, onNodeDragStart, setCanvasInteraction],
   );
 
-  // 仅在线型切换时重建，避免每帧新对象触发 React Flow 内部更新
+  // 浠呭湪绾垮瀷鍒囨崲鏃堕噸寤猴紝閬垮厤姣忓抚鏂板璞¤Е鍙?React Flow 鍐呴儴鏇存柊
   const defaultEdgeOptions = useMemo(
     () => ({
       type: smoothLine ? 'smoothstep' : 'default',
@@ -928,34 +928,33 @@ function CanvasInner() {
           ...node,
           style: {
             ...node.style,
-            // 笔记的透明外接矩形不能遮挡下方节点；可见内容在 canvas-drawing.css 中恢复命中。
+            // 绗旇鐨勯€忔槑澶栨帴鐭╁舰涓嶈兘閬尅涓嬫柟鑺傜偣锛涘彲瑙佸唴瀹瑰湪 canvas-drawing.css 涓仮澶嶅懡涓€?
             pointerEvents: 'none' as const,
           },
         }
       : node);
   }, [draftNode, renderableGraph.nodes]);
 
-  // 仅派生渲染状态，不把隐藏和节点选中效果写回可持久化的边数据。
+  // 浠呮淳鐢熸覆鏌撶姸鎬侊紝涓嶆妸闅愯棌鍜岃妭鐐归€変腑鏁堟灉鍐欏洖鍙寔涔呭寲鐨勮竟鏁版嵁銆?
   const renderedEdges = useMemo(() => {
-    if (selectedNodeIds.length === 0) return renderableGraph.edges;
-
-    const selectedIds = new Set(selectedNodeIds);
+    const selectedIds = selectedNodeIds.length > 0 ? new Set(selectedNodeIds) : null;
     return renderableGraph.edges.map((edge) => {
-      if (!selectedIds.has(edge.source) && !selectedIds.has(edge.target)) return edge;
+      const baseEdgeType = edge.type === 'smoothstep' || (!edge.type && smoothLine)
+        ? 'smoothstep'
+        : 'default';
       return {
         ...edge,
-        type: 'selected-node-flow',
+        type: 'scissor-hover',
         data: {
           ...edge.data,
-          selectedNodeFlowBaseType: edge.type === 'smoothstep' || (!edge.type && smoothLine)
-            ? 'smoothstep'
-            : 'default',
+          baseEdgeType,
+          selectedNodeFlow: selectedIds !== null && (selectedIds.has(edge.source) || selectedIds.has(edge.target)),
         },
       };
     });
   }, [renderableGraph.edges, selectedNodeIds, smoothLine]);
 
-  // ── Node change handler ──
+  // 鈹€鈹€ Node change handler 鈹€鈹€
   const handleNodesChange = useCallback(
     (changes: NodeChange<RFNode<BaseNodeData>>[]) => {
       const lockedNodeIds = new Set(
@@ -968,10 +967,10 @@ function CanvasInner() {
       );
       if (unlockedChanges.length === 0) return;
 
-      // 把吸附后的位置直接注入 React Flow 的变更管线
-      // （成为唯一真相源，避免二次 setNodes 覆盖导致的漂移/橡皮筋）。
-      // 注意：松手那一帧 dragging=false 也要吸附，否则会弹回原始落点（位移）。
-      // applySnap 在非拖拽期（dragCtx 为空）是无副作用直通，故无需判断 dragging。
+      // 鎶婂惛闄勫悗鐨勪綅缃洿鎺ユ敞鍏?React Flow 鐨勫彉鏇寸绾?
+      // 锛堟垚涓哄敮涓€鐪熺浉婧愶紝閬垮厤浜屾 setNodes 瑕嗙洊瀵艰嚧鐨勬紓绉?姗＄毊绛嬶級銆?
+      // 娉ㄦ剰锛氭澗鎵嬮偅涓€甯?dragging=false 涔熻鍚搁檮锛屽惁鍒欎細寮瑰洖鍘熷钀界偣锛堜綅绉伙級銆?
+      // applySnap 鍦ㄩ潪鎷栨嫿鏈燂紙dragCtx 涓虹┖锛夋槸鏃犲壇浣滅敤鐩撮€氾紝鏁呮棤闇€鍒ゆ柇 dragging銆?
       const draggingPosChanges = unlockedChanges.filter(
         (c) => c.type === 'position' && c.position,
       );
@@ -998,13 +997,13 @@ function CanvasInner() {
         }
       }
 
-      // Detect group node removals — convert to ungroup
+      // Detect group node removals 鈥?convert to ungroup
       const removedIds = snapped
         .filter((c) => c.type === 'remove')
         .map((c) => c.id);
 
-      // 快速路径：纯拖拽/选择变更（无删除）—— 用函数式更新，始终基于最新
-      // store.nodes，避免快速拖动时闭包 nodes 过期导致的抖动卡顿。
+      // 蹇€熻矾寰勶細绾嫋鎷?閫夋嫨鍙樻洿锛堟棤鍒犻櫎锛夆€斺€?鐢ㄥ嚱鏁板紡鏇存柊锛屽缁堝熀浜庢渶鏂?
+      // store.nodes锛岄伩鍏嶅揩閫熸嫋鍔ㄦ椂闂寘 nodes 杩囨湡瀵艰嚧鐨勬姈鍔ㄥ崱椤裤€?
       if (removedIds.length === 0) {
         useAppStore.setState((s) => ({
           nodes: applyNodeChanges(snapped, s.nodes) as RFNode<BaseNodeData>[],
@@ -1017,7 +1016,7 @@ function CanvasInner() {
     [applySnap, applyStableNodeChanges],
   );
 
-  // ── 拖入宫格分镜：进入节点范围显示缩略图，只有空格允许放置 ──
+  // 鈹€鈹€ 鎷栧叆瀹牸鍒嗛暅锛氳繘鍏ヨ妭鐐硅寖鍥存樉绀虹缉鐣ュ浘锛屽彧鏈夌┖鏍煎厑璁告斁缃?鈹€鈹€
   const sbDropTarget = useRef<HTMLElement | null>(null);
   const [dropGhost, setDropGhost] = useState<{
     url: string;
@@ -1056,8 +1055,8 @@ function CanvasInner() {
   }, []);
 
   /**
-   * 命中分镜表的画面格。
-   * 与宫格不同，已绑定的格子也接受放置——直接换绑，比先解绑再拖一次顺手。
+   * 鍛戒腑鍒嗛暅琛ㄧ殑鐢婚潰鏍笺€?
+   * 涓庡鏍间笉鍚岋紝宸茬粦瀹氱殑鏍煎瓙涔熸帴鍙楁斁缃€斺€旂洿鎺ユ崲缁戯紝姣斿厛瑙ｇ粦鍐嶆嫋涓€娆￠『鎵嬨€?
    */
   const findShotlistDropHit = useCallback((
     node: RFNode,
@@ -1076,7 +1075,7 @@ function CanvasInner() {
     return null;
   }, []);
 
-  // 按鼠标位置命中宫格节点与真实空格，兼容缩放和非均匀自定义宫格。
+  // 鎸夐紶鏍囦綅缃懡涓鏍艰妭鐐逛笌鐪熷疄绌烘牸锛屽吋瀹圭缉鏀惧拰闈炲潎鍖€鑷畾涔夊鏍笺€?
   const findStoryboardDropHit = useCallback((
     node: RFNode,
     clientX: number,
@@ -1122,7 +1121,7 @@ function CanvasInner() {
         clearSbDropTarget();
         if (cell) { cell.classList.add('sb-cell--drop-target'); sbDropTarget.current = cell; }
       }
-      // 进入宫格节点后隐藏真实节点；空格上倾斜表示可放置，占用区域保持水平。
+      // 杩涘叆瀹牸鑺傜偣鍚庨殣钘忕湡瀹炶妭鐐癸紱绌烘牸涓婂€炬枩琛ㄧず鍙斁缃紝鍗犵敤鍖哄煙淇濇寔姘村钩銆?
       const url = (node.data?.imageUrl || node.data?.thumbnailUrl) as string | undefined;
       if (hit && url) {
         setDropGhost({ url, x: e.clientX, y: e.clientY, canDrop: cell != null });
@@ -1136,7 +1135,7 @@ function CanvasInner() {
         clearGhostNodeHidden();
       }
 
-      // 分镜表画面格：只做高亮，不隐藏被拖的节点——绑定后它仍要留在画布上
+      // 鍒嗛暅琛ㄧ敾闈㈡牸锛氬彧鍋氶珮浜紝涓嶉殣钘忚鎷栫殑鑺傜偣鈥斺€旂粦瀹氬悗瀹冧粛瑕佺暀鍦ㄧ敾甯冧笂
       const frameCell = findShotlistDropHit(node, e.clientX, e.clientY);
       if (frameCell !== shotlistDropTarget.current) {
         clearShotlistDropTarget();
@@ -1149,7 +1148,7 @@ function CanvasInner() {
     [findStoryboardDropHit, clearSbDropTarget, clearGhostNodeHidden, findShotlistDropHit, clearShotlistDropTarget, clearFolderDropTarget],
   );
 
-  // ── Auto group/ungroup on drag stop ──
+  // 鈹€鈹€ Auto group/ungroup on drag stop 鈹€鈹€
   const handleNodeDragStop = useCallback(
     (event: React.MouseEvent, node: RFNode) => {
       setCanvasInteraction('node', false);
@@ -1246,7 +1245,7 @@ function CanvasInner() {
         )}
 
 
-        {/* Mini Map — interactive navigator, toggle with M key */}
+        {/* Mini Map 鈥?interactive navigator, toggle with M key */}
         {minimapVisible && (
           <>
             <MiniMap
@@ -1274,7 +1273,7 @@ function CanvasInner() {
           showInteractive={false}
         />
 
-        {/* 操作记录 — 撤销 / 还原 + 可回溯的操作列表 */}
+        {/* 鎿嶄綔璁板綍 鈥?鎾ら攢 / 杩樺師 + 鍙洖婧殑鎿嶄綔鍒楄〃 */}
         <Panel position="top-right" className="canvas-history-slot">
           <HistoryTimelinePanel />
         </Panel>
@@ -1419,7 +1418,7 @@ function CanvasInner() {
       <MultiSelectToolbar />
     </div>
 
-    {/* 拖入宫格：节点范围内显示缩略图，空格上倾斜表示可放置 */}
+    {/* 鎷栧叆瀹牸锛氳妭鐐硅寖鍥村唴鏄剧ず缂╃暐鍥撅紝绌烘牸涓婂€炬枩琛ㄧず鍙斁缃?*/}
     {dropGhost && createPortal(
       <div
         className={`sb-drag-ghost${dropGhost.canDrop ? '' : ' sb-drag-ghost--over-storyboard'}`}

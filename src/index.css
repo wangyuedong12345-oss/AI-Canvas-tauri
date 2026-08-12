@@ -1,5 +1,5 @@
 /* ============================================
-   AI Canvas — Styles Entry Point
+   AI Canvas 鈥?Styles Entry Point
    All partials imported here; main.tsx imports this file.
    ============================================ */
 
@@ -35,6 +35,7 @@
 @import './styles/canvas-drawing.css';
 @import './styles/video-editor.css';
 @import './styles/range-controls.css';
+@import './styles/edge-scissor.css';
 
 /* Global overlay scrollbars are managed by OverlayScrollbarLayer. */
 * {
