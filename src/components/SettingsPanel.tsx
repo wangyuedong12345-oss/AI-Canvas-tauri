@@ -515,14 +515,8 @@ export default function SettingsPanel() {
                           <div className={`w-full h-12 rounded overflow-hidden border border-canvas-border flex items-center justify-center ${
                             value === 'default'
                               ? 'bg-[#0a0a1a]'
-                              : value === 'solar-system'
-                              ? 'bg-gradient-to-br from-[#0a0a1a] via-[#1a1030] to-[#0a1020]'
-                              : value === 'nebula'
-                              ? 'bg-gradient-to-b from-[#0a0514] via-[#14081e] to-[#0a0514]'
                               : value === 'off-white'
                               ? 'bg-[#F4F6FB]'
-                              : value === 'frosted-glass'
-                              ? 'canvas-bg-frosted-preview'
                               : value === 'custom'
                               ? (config.customBackgroundUrl
                                 ? ''
@@ -540,27 +534,8 @@ export default function SettingsPanel() {
                                 backgroundSize: '8px 8px',
                               }} />
                             )}
-                            {value === 'solar-system' && (
-                              <div className="w-full h-full flex items-center justify-center relative">
-                                <div className="w-5 h-5 rounded-full bg-gradient-to-br from-purple-400 to-orange-400 opacity-80 shadow-lg shadow-orange-500/30" />
-                                <div className="absolute bottom-1 left-0 right-0 flex justify-center">
-                                  <div className="w-8 h-1 rounded-full" style={{ borderRadius: '50% 50% 0 0', borderTop: '1px solid var(--white-alpha-15)' }} />
-                                </div>
-                              </div>
-                            )}
-                            {value === 'nebula' && (
-                              <div className="w-full h-full flex items-center justify-center gap-1.5 relative">
-                                <div className="flex gap-1.5 opacity-60">
-                                  <div className="w-2 h-3 rounded-sm bg-purple-600/60 blur-[2px]" />
-                                  <div className="w-2 h-3 rounded-sm bg-fuchsia-600/50 blur-[2px]" />
-                                  <div className="w-2 h-3 rounded-sm bg-violet-600/40 blur-[2px]" />
-                                </div>
-                                <div className="absolute inset-0" style={{
-                                  backgroundImage: 'radial-gradient(1px 1px, rgba(180,150,255,0.3) 0%, transparent 100%)',
-                                  backgroundSize: '12px 12px',
-                                }} />
-                              </div>
-                            )}
+
+
                             {value === 'off-white' && (
                               <div className="w-full h-full" style={{
                                 backgroundImage: 'radial-gradient(circle, rgba(0,0,0,0.06) 1px, transparent 1px)',

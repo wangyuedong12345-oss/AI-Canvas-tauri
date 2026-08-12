@@ -392,7 +392,7 @@ export default function App() {
       }}
     >
       {/* Content area — clip-path clips ALL descendants including fixed-position backdrops */}
-      <div className="app-box app-shell__content absolute bg-canvas-bg/[0.988] shadow-2xl overflow-hidden">
+      <div className="app-box app-shell__content absolute bg-canvas-bg shadow-2xl overflow-hidden">
         <div className="app-canvas-viewport absolute inset-0">
           <CanvasBackground />
           <Canvas />

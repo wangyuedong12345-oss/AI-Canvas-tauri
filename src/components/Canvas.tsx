@@ -1,5 +1,5 @@
-/**
- * Canvas 鐢诲竷涓荤粍浠?鈥?React Flow 鐢诲竷鏍稿績锛岀鐞嗚妭鐐?杈规覆鏌撱€佹嫋鏀俱€佽繛绾裤€佸彸閿彍鍗曘€佺┖鐘舵€?
+﻿/**
+ * Canvas 閻㈣绔锋稉鑽ょ矋娴?閳?React Flow 閻㈣绔烽弽绋跨妇閿涘瞼顓搁悶鍡氬Ν閻?鏉堣瑕嗛弻鎾扁偓浣瑰珛閺€淇扁偓浣界箾缁捐￥鈧礁褰搁柨顔垮綅閸楁洏鈧胶鈹栭悩鑸碘偓?
  */
 import { lazy, Suspense, useCallback, useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
@@ -68,13 +68,13 @@ import {
   type CanvasPanByDetail,
 } from '../services/canvasViewportService';
 
-// 鎳掑姞杞斤細鍏ㄦ櫙鑺傜偣寮曞叆 three锛堜綋绉ぇ鎴凤級锛岀敾甯冧笂鍑虹幇鍏ㄦ櫙鑺傜偣鏃舵墠鍔犺浇
+// 閹虫帒濮炴潪鏂ょ窗閸忋劍娅欓懞鍌滃仯瀵洖鍙?three閿涘牅缍嬬粔顖氥亣閹村嚖绱氶敍宀€鏁剧敮鍐х瑐閸戣櫣骞囬崗銊︽珯閼哄倻鍋ｉ弮鑸靛閸旂姾娴?
 const PanoramaNodeLazy = lazy(() => import('./nodes/PanoramaNode'));
 function PanoramaNode(props: { id: string; data: BaseNodeData; selected?: boolean }) {
   return <Suspense fallback={null}><PanoramaNodeLazy {...props} /></Suspense>;
 }
 
-// 鎳掑姞杞斤細3D 瀵兼紨鍙拌妭鐐规寜闇€杩炴帴鏈湴 Tauri 鐙珛绐楀彛
+// 閹虫帒濮炴潪鏂ょ窗3D 鐎靛吋绱ㄩ崣鎷屽Ν閻愯瀵滈棁鈧潻鐐村复閺堫剙婀?Tauri 閻欘剛鐝涚粣妤€褰?
 const DirectorDeskNodeLazy = lazy(() => import('./nodes/DirectorDeskNode'));
 function DirectorDeskNode(props: { id: string; data: BaseNodeData; selected?: boolean }) {
   return <Suspense fallback={null}><DirectorDeskNodeLazy {...props} /></Suspense>;
@@ -82,11 +82,11 @@ function DirectorDeskNode(props: { id: string; data: BaseNodeData; selected?: bo
 
 const CharacterAssetDialog = lazy(() => import('./CharacterAssetDialog'));
 
-// 鈹€鈹€ Node types mapping 鈹€鈹€
+// 閳光偓閳光偓 Node types mapping 閳光偓閳光偓
 /**
- * 缁欐瘡涓妭鐐圭粍浠跺寘涓€灞傞敊璇竟鐣岋細鍗曚釜鑺傜偣娓叉煋鎶涢敊锛堣剰鏁版嵁銆佸鍏ユ枃浠躲€佹棫鐗堣縼绉绘畫鐣欙級
- * 鍙檷绾ф垚涓€寮犲崰浣嶅崱锛岀敾甯冨叾浣欓儴鍒嗙户缁彲鐢ㄣ€?
- * 鍙湪妯″潡椤跺眰璋冪敤涓€娆?鈥斺€?React Flow 瑕佹眰 nodeTypes 涓庡叾涓殑缁勪欢韬唤淇濇寔绋冲畾銆?
+ * 缂佹瑦鐦℃稉顏囧Ν閻愬湱绮嶆禒璺哄瘶娑撯偓鐏炲倿鏁婄拠顖濈珶閻ｅ矉绱伴崡鏇氶嚋閼哄倻鍋ｅ〒鍙夌厠閹舵盯鏁婇敍鍫ｅ壈閺佺増宓侀妴浣割嚤閸忋儲鏋冩禒韬测偓浣规＋閻楀牐绺肩粔缁樼暙閻ｆ瑱绱?
+ * 閸欘亪妾风痪褎鍨氭稉鈧鐘插窗娴ｅ秴宕遍敍宀€鏁剧敮鍐ㄥ従娴ｆ瑩鍎撮崚鍡欐埛缂侇厼褰查悽銊ｂ偓?
+ * 閸欘亜婀Ο鈥虫健妞よ泛鐪扮拫鍐暏娑撯偓濞?閳ユ柡鈧?React Flow 鐟曚焦鐪?nodeTypes 娑撳骸鍙炬稉顓犳畱缂佸嫪娆㈤煬顐″敜娣囨繃瀵旂粙鍐茬暰閵?
  */
 function withNodeRenderBoundaries(types: NodeTypes): NodeTypes {
   return Object.fromEntries(Object.entries(types).map(([typeName, NodeComponent]) => {
@@ -125,8 +125,8 @@ const edgeTypes: EdgeTypes = {
     'scissor-hover': ScissorHoverEdge,
 };
 
-// 鈹€鈹€ Stable ReactFlow props (hoisted to avoid new identities every render,
-//    which makes React Flow re-run internal effects and drop frames on drag) 鈹€鈹€
+// 閳光偓閳光偓 Stable ReactFlow props (hoisted to avoid new identities every render,
+//    which makes React Flow re-run internal effects and drop frames on drag) 閳光偓閳光偓
 const FIT_VIEW_OPTIONS = { padding: 0.2, maxZoom: 1 };
 const PRO_OPTIONS = { hideAttribution: true };
 const PAN_ON_DRAG_DEFAULT = [1, 2]; // 默认交互：右键(2) + 中键(1) 拖拽平移
@@ -142,7 +142,7 @@ const NODE_TOOLBAR_MIN_SCREEN_SCALE = 0.8;
 const NODE_TOOLBAR_MAX_SCREEN_SCALE = 1.25;
 const NODE_TOOLBAR_SCALE_EPSILON = 0.0005;
 
-// 鈹€鈹€ 浜や簰妯″紡棰勮锛堝喕缁撳璞★紝閬垮厤姣忔 render 浜х敓鏂拌韩浠斤紝瀵艰嚧 React Flow 鍐呴儴 effect 閲嶈窇銆佹嫋鎷芥帀甯э級鈹€鈹€
+// 閳光偓閳光偓 娴溿倓绨板Ο鈥崇础妫板嫯顔曢敍鍫濆枙缂佹挸顕挒鈽呯礉闁灝鍘ゅВ蹇旑偧 render 娴溠呮晸閺傛媽闊╂禒鏂ょ礉鐎佃壈鍤?React Flow 閸愬懘鍎?effect 闁插秷绐囬妴浣瑰珛閹疯姤甯€鐢嶇礆閳光偓閳光偓
 const DEFAULT_INTERACTION = Object.freeze({
   panOnScroll: shouldUseMacTrackpadPan,
   zoomOnScroll: !shouldUseMacTrackpadPan,
@@ -156,15 +156,15 @@ const DEFAULT_INTERACTION = Object.freeze({
 
 const CLASSIC_INTERACTION = Object.freeze({
   panOnScroll: true,
-  panOnScrollMode: PanOnScrollMode.Free, // Free 鎵嶈兘鍏奸【 Shift+婊氳疆姘村钩骞崇Щ涓庢櫘閫氭粴杞瀭鐩村钩绉?
+  panOnScrollMode: PanOnScrollMode.Free, // Free 閹靛秷鍏橀崗濂搞€?Shift+濠婃俺鐤嗗鏉戦挬楠炲磭些娑撳孩娅橀柅姘泊鏉烆喖鐎惄鏉戦挬缁?
   panOnScrollSpeed: 0.5,
   zoomOnScroll: false,
   zoomOnPinch: true,
-  zoomOnDoubleClick: false, // 鍏抽棴鍙屽嚮缂╂斁锛岄伩鍏嶄笌銆屽弻鍑荤┖鐧藉垱寤烘枃鏈妭鐐广€嶅啿绐?
-  zoomActivationKeyCode: 'Control', // Ctrl+婊氳疆缂╂斁
+  zoomOnDoubleClick: false, // 閸忔娊妫撮崣灞藉毊缂傗晜鏂侀敍宀勪缉閸忓秳绗岄妴灞藉蓟閸戣崵鈹栭惂钘夊灡瀵ょ儤鏋冮張顒冨Ν閻愬箍鈧秴鍟跨粣?
+  zoomActivationKeyCode: 'Control', // Ctrl+濠婃俺鐤嗙紓鈺傛杹
   panOnDrag: PAN_ON_DRAG_CLASSIC,
   selectionOnDrag: false,
-  selectionKeyCode: 'Shift', // Shift+宸﹂敭鎷栨嫿 鈫?妗嗛€?
+  selectionKeyCode: 'Shift', // Shift+瀹革箓鏁幏鏍ㄥ 閳?濡楀棝鈧?
   multiSelectionKeyCode: 'Shift',
   selectionMode: SelectionMode.Partial,
   deleteKeyCode: null,
@@ -199,7 +199,7 @@ const minimapNodeColor = (node: RFNode) => {
   }
 };
 
-// 鈹€鈹€ Snap lines overlay 鈹€鈹€
+// 閳光偓閳光偓 Snap lines overlay 閳光偓閳光偓
 type SpacingSnapLine = Extract<SnapLine, { kind: 'spacing' }>;
 
 function formatSpacingDistance(distance: number): string {
@@ -380,9 +380,10 @@ function CanvasInner() {
   const minimapVisible = useAppStore((s) => s.minimapVisible);
   const closeNodeDialog = useAppStore((s) => s.closeNodeDialog);
   const interactionMode = useAppStore((s) => s.config.interactionMode ?? 'default');
+  const canvasBackground = useAppStore((s) => s.config.canvasBackground);
   const canvasNoteToolbarVisible = useAppStore((s) => s.config.canvasNoteToolbarVisible !== false);
   const interaction = interactionMode === 'classic' ? CLASSIC_INTERACTION : DEFAULT_INTERACTION;
-  // 鍙抽敭 effect 鐢?ref 璇诲彇妯″紡锛岄伩鍏嶆妸 interactionMode 鍔犺繘 effect 渚濊禆鑰屽鑷寸洃鍚櫒閲嶆寕
+  // 閸欐娊鏁?effect 閻?ref 鐠囪褰囧Ο鈥崇础閿涘矂浼╅崗宥嗗Ω interactionMode 閸旂姾绻?effect 娓氭繆绂嗛懓灞筋嚤閼峰娲冮崥顒€娅掗柌宥嗗瘯
   const interactionModeRef = useRef(interactionMode);
   useEffect(() => {
     interactionModeRef.current = interactionMode;
@@ -484,8 +485,8 @@ function CanvasInner() {
     });
   }, [updateNodeToolbarScale]);
 
-  // 鑺傜偣杩涘満鍔ㄧ敾锛坱ranslateY锛変細璁?React Flow 鍦ㄦ寕杞界灛闂存祴寰楀亸绉荤殑 handle 閿氱偣骞剁紦瀛橈紝
-  // 瀵艰嚧杩炵嚎璧锋鐐归敊浣嶃€傝繘鍦哄姩鐢荤粨鏉燂紙钀戒綅 translateY:0锛夊悗閲嶆柊娴嬮噺璇ヨ妭鐐圭殑 handle銆?
+  // 閼哄倻鍋ｆ潻娑樻簚閸斻劎鏁鹃敍鍧眗anslateY閿涘绱扮拋?React Flow 閸︺劍瀵曟潪鐣岀仜闂傚瓨绁村妤€浜哥粔鑽ゆ畱 handle 闁挎氨鍋ｉ獮鍓佺处鐎涙﹫绱?
+  // 鐎佃壈鍤ф潻鐐靛殠鐠ч攱顒涢悙褰掓晩娴ｅ秲鈧倽绻橀崷鍝勫З閻㈣崵绮ㄩ弶鐕傜礄閽€鎴掔秴 translateY:0閿涘鎮楅柌宥嗘煀濞村鍣虹拠銉ㄥΝ閻愬湱娈?handle閵?
   useEffect(() => {
     const onAnimEnd = (e: AnimationEvent) => {
       if (e.animationName !== 'nodeIn') return;
@@ -543,12 +544,12 @@ function CanvasInner() {
       panOnDrag: false,
       selectionOnDrag: false,
     } : {}),
-    // React Flow 浼氬拷鐣ュ彉鍥?undefined 鐨勫彈鎺у睘鎬э紝鍥犳缁撴潫缁樺浘鏃跺繀椤绘樉寮忔仮澶嶃€?
+    // React Flow 娴兼艾鎷烽悾銉ュ綁閸?undefined 閻ㄥ嫬褰堥幒褍鐫橀幀褝绱濋崶鐘愁劃缂佹挻娼紒妯烘禈閺冭泛绻€妞ょ粯妯夊蹇斾划婢跺秲鈧?
     nodesDraggable: !drawingActive,
     elementsSelectable: !drawingActive,
   }), [drawingActive, interaction]);
 
-  // 鈹€鈹€ UI toggles (persisted to localStorage) 鈹€鈹€
+  // 閳光偓閳光偓 UI toggles (persisted to localStorage) 閳光偓閳光偓
   const [showGrid, setShowGrid] = useState(() => localStorage.getItem('canvas-showGrid') !== 'false');
   const [smoothLine, setSmoothLine] = useState(() => localStorage.getItem('canvas-smoothLine') !== 'false');
 
@@ -585,7 +586,7 @@ function CanvasInner() {
 
   const toggleGrid = useCallback(() => setShowGrid((v) => !v), []);
 
-  // 鈹€鈹€ Connection drop menu 鈹€鈹€
+  // 閳光偓閳光偓 Connection drop menu 閳光偓閳光偓
   const {
     menu: connectionMenu,
     menuRef: connectionMenuRef,
@@ -595,7 +596,7 @@ function CanvasInner() {
     sourceNode,
   } = useConnectionDropMenu(smoothLine);
 
-  // 鈹€鈹€ Node context menu 鈹€鈹€
+  // 閳光偓閳光偓 Node context menu 閳光偓閳光偓
   const {
     menu: nodeCtxMenu,
     menuRef: nodeCtxMenuRef,
@@ -639,7 +640,7 @@ function CanvasInner() {
     ? nodes.find((n) => n.id === nodeCtxMenu.nodeId && n.type === 'group') != null
     : false;
 
-  // 鈹€鈹€ Canvas context menu 鈹€鈹€
+  // 閳光偓閳光偓 Canvas context menu 閳光偓閳光偓
   const {
     menu: ctxMenu,
     menuRef: ctxMenuRef,
@@ -667,7 +668,7 @@ function CanvasInner() {
     openCanvasMenu: openCtxMenu,
   });
 
-  // 鈹€鈹€ External clipboard paste (native paste event 鈫?DataTransfer) 鈹€鈹€
+  // 閳光偓閳光偓 External clipboard paste (native paste event 閳?DataTransfer) 閳光偓閳光偓
   useEffect(() => {
     const handler = (e: ClipboardEvent) => {
       // Skip if user is editing an input
@@ -687,7 +688,7 @@ function CanvasInner() {
     return () => window.removeEventListener('paste', handler, true);
   }, [reactFlowInstance]);
 
-  // 鈹€鈹€ Fit view event (project switch / F key) 鈹€鈹€
+  // 閳光偓閳光偓 Fit view event (project switch / F key) 閳光偓閳光偓
   useEffect(() => {
     const handler = () => {
       // Wait one frame for React to finish rendering new nodes/edges
@@ -699,7 +700,7 @@ function CanvasInner() {
     return () => window.removeEventListener('canvas-fit-view', handler);
   }, [reactFlowInstance]);
 
-  // 鈹€鈹€ Keep anchored overlays visible by panning the whole canvas 鈹€鈹€
+  // 閳光偓閳光偓 Keep anchored overlays visible by panning the whole canvas 閳光偓閳光偓
   useEffect(() => {
     const handler = (event: Event) => {
       const detail = (event as CustomEvent<CanvasPanByDetail>).detail;
@@ -748,7 +749,7 @@ function CanvasInner() {
     };
   }, [reactFlowInstance]);
 
-  // 鈹€鈹€ Focus node events (history / Agent-created node batch) 鈹€鈹€
+  // 閳光偓閳光偓 Focus node events (history / Agent-created node batch) 閳光偓閳光偓
   useEffect(() => {
     const scheduledFrames = new Set<number>();
     const focusNodes = (
@@ -798,7 +799,7 @@ function CanvasInner() {
     };
   }, [reactFlowInstance]);
 
-  // 鈹€鈹€ Node click 鈫?AI dialog 鈹€鈹€
+  // 閳光偓閳光偓 Node click 閳?AI dialog 閳光偓閳光偓
   const openNodeDialog = useAppStore((s) => s.openNodeDialog);
   const inlineEditClickTimerRef = useRef<number | null>(null);
   const openDialogForNode = useCallback(
@@ -833,7 +834,7 @@ function CanvasInner() {
         && node.data?.type === 'ai-text'
         && node.data?.role !== 'source';
       if (isEmptyTextEditTrigger) {
-        // 绗竴娆＄偣鍑诲厛璁?React Flow 瀹屾垚閫変腑锛涚浜屾鐐瑰嚮浼氬彇娑堝脊绐楀苟浜ょ粰 TextNode 鐨勫弻鍑荤紪杈戙€?
+        // 缁楊兛绔村▎锛勫仯閸戣鍘涚拋?React Flow 鐎瑰本鍨氶柅澶夎厬閿涙稓顑囨禍灞绢偧閻愮懓鍤导姘絿濞戝牆鑴婄粣妤€鑻熸禍銈囩舶 TextNode 閻ㄥ嫬寮婚崙鑽ょ椽鏉堟垯鈧?
         if (e.detail > 1) return;
         inlineEditClickTimerRef.current = window.setTimeout(() => {
           inlineEditClickTimerRef.current = null;
@@ -859,25 +860,25 @@ function CanvasInner() {
     [openDialogForNode],
   );
 
-  // 鈹€鈹€ Selection sync 鈹€鈹€
+  // 閳光偓閳光偓 Selection sync 閳光偓閳光偓
   const onSelectionChange = useCallback(
     (changes: OnSelectionChangeParams) => {
       const sel = changes.nodes;
       const nonGroup = sel.filter((n) => n.type !== 'group');
-      // 妗嗛€夊拷鐣ュ垎缁勮妭鐐癸細涓庡叾瀹冭妭鐐逛竴鍚岃閫変腑鏃讹紝store 閫夊尯鍓旈櫎鍒嗙粍锛堝垹闄?鍒嗙粍涓嶆尝鍙婂鍣級锛?
-      // 鍗曠嫭鐐瑰嚮鍒嗙粍浠嶄繚鐣欙紙渚夸簬鍒犻櫎/瑙ｆ暎锛夈€俁F 瑙嗚鍘婚€夊湪 onSelectionEnd 澶勭悊銆?
+      // 濡楀棝鈧鎷烽悾銉ュ瀻缂佸嫯濡悙鐧哥窗娑撳骸鍙剧€瑰啳濡悙閫涚閸氬矁顫﹂柅澶夎厬閺冭绱漵tore 闁灏崜鏃堟珟閸掑棛绮嶉敍鍫濆灩闂?閸掑棛绮嶆稉宥嗗皾閸欏﹤顔愰崳顭掔礆閿?
+      // 閸楁洜瀚悙鐟板毊閸掑棛绮嶆禒宥勭箽閻ｆ瑱绱欐笟澶哥艾閸掔娀娅?鐟欙絾鏆庨敍澶堚偓淇丗 鐟欏棜顫庨崢濠氣偓澶婃躬 onSelectionEnd 婢跺嫮鎮婇妴?
       const next = nonGroup.length > 0 ? nonGroup : sel;
       setSelectedNodeIds(next.map((n) => n.id));
     },
     [setSelectedNodeIds],
   );
 
-  // 妗嗛€夌粨鏉熷悗锛氳嫢鍒嗙粍鑺傜偣涓庡叾瀹冭妭鐐逛竴鍚岃妗嗕腑锛屽彇娑堝垎缁勮妭鐐圭殑閫変腑锛岄伩鍏嶉殢鍚庤涓€璧锋嫋鍔?
+  // 濡楀棝鈧绮ㄩ弶鐔锋倵閿涙俺瀚㈤崚鍡欑矋閼哄倻鍋ｆ稉搴″従鐎瑰啳濡悙閫涚閸氬矁顫﹀鍡曡厬閿涘苯褰囧☉鍫濆瀻缂佸嫯濡悙鍦畱闁鑵戦敍宀勪缉閸忓秹娈㈤崥搴ゎ潶娑撯偓鐠ч攱瀚嬮崝?
   const onSelectionEnd = useCallback(() => {
     clearGroupedSelection();
   }, [clearGroupedSelection]);
 
-  // 鈹€鈹€ Node snap 鈹€鈹€
+  // 閳光偓閳光偓 Node snap 閳光偓閳光偓
   const {
     snapLines,
     onNodeDragStart,
@@ -888,13 +889,13 @@ function CanvasInner() {
     onResizeStop,
   } = useNodeSnap();
 
-  // 缂╂斁鍚搁檮妗ユ帴锛氱ǔ瀹氬紩鐢ㄩ€忎紶缁欒妭鐐瑰唴鐨?ResizeHandle锛堢粡 Context锛?
+  // 缂傗晜鏂侀崥鎼佹濡椼儲甯撮敍姘鼻旂€规艾绱╅悽銊┾偓蹇庣炊缂佹瑨濡悙鐟板敶閻?ResizeHandle閿涘牏绮?Context閿?
   const resizeSnapApi = useMemo(
     () => ({ onResizeStart, applyResizeSnap, onResizeStop }),
     [onResizeStart, applyResizeSnap, onResizeStop],
   );
 
-  // 鎸変綇 Ctrl/鈱?寮€濮嬫嫋鎷?鈫?鍦ㄥ師浣嶅鍒朵竴涓妭鐐癸紙鎷栧姩鐨勪粛鏄師鑺傜偣锛岀瓑浜?鎷栧嚭涓€涓壇鏈?锛?
+  // 閹稿缍?Ctrl/閳?瀵偓婵瀚嬮幏?閳?閸︺劌甯担宥咁槻閸掓湹绔存稉顏囧Ν閻愮櫢绱欓幏鏍уЗ閻ㄥ嫪绮涢弰顖氬斧閼哄倻鍋ｉ敍宀€鐡戞禍?閹锋牕鍤稉鈧稉顏勫閺?閿?
   const handleNodeDragStart = useCallback(
     (evt: React.MouseEvent, node: RFNode<BaseNodeData>) => {
       setCanvasInteraction('node', true);
@@ -907,7 +908,7 @@ function CanvasInner() {
     [commitToHistory, duplicateNode, onNodeDragStart, setCanvasInteraction],
   );
 
-  // 浠呭湪绾垮瀷鍒囨崲鏃堕噸寤猴紝閬垮厤姣忓抚鏂板璞¤Е鍙?React Flow 鍐呴儴鏇存柊
+  // 娴犲懎婀痪鍨€烽崚鍥ㄥ床閺冨爼鍣稿鐚寸礉闁灝鍘ゅВ蹇撴姎閺傛澘顕挒陇袝閸?React Flow 閸愬懘鍎撮弴瀛樻煀
   const defaultEdgeOptions = useMemo(
     () => ({
       type: smoothLine ? 'smoothstep' : 'default',
@@ -928,14 +929,14 @@ function CanvasInner() {
           ...node,
           style: {
             ...node.style,
-            // 绗旇鐨勯€忔槑澶栨帴鐭╁舰涓嶈兘閬尅涓嬫柟鑺傜偣锛涘彲瑙佸唴瀹瑰湪 canvas-drawing.css 涓仮澶嶅懡涓€?
+            // 缁楁棁顔囬惃鍕偓蹇旀婢舵牗甯撮惌鈺佽埌娑撳秷鍏橀柆顔藉皡娑撳鏌熼懞鍌滃仯閿涙稑褰茬憴浣稿敶鐎圭懓婀?canvas-drawing.css 娑擃厽浠径宥呮嚒娑擃厹鈧?
             pointerEvents: 'none' as const,
           },
         }
       : node);
   }, [draftNode, renderableGraph.nodes]);
 
-  // 浠呮淳鐢熸覆鏌撶姸鎬侊紝涓嶆妸闅愯棌鍜岃妭鐐归€変腑鏁堟灉鍐欏洖鍙寔涔呭寲鐨勮竟鏁版嵁銆?
+  // 娴犲懏娣抽悽鐔歌閺屾挾濮搁幀渚婄礉娑撳秵濡搁梾鎰閸滃矁濡悙褰掆偓澶夎厬閺佸牊鐏夐崘娆忔礀閸欘垱瀵旀稊鍛閻ㄥ嫯绔熼弫鐗堝祦閵?
   const renderedEdges = useMemo(() => {
     const selectedIds = selectedNodeIds.length > 0 ? new Set(selectedNodeIds) : null;
     return renderableGraph.edges.map((edge) => {
@@ -955,7 +956,7 @@ function CanvasInner() {
     });
   }, [renderableGraph.edges, selectedNodeIds, smoothLine]);
 
-  // 鈹€鈹€ Node change handler 鈹€鈹€
+  // 閳光偓閳光偓 Node change handler 閳光偓閳光偓
   const handleNodesChange = useCallback(
     (changes: NodeChange<RFNode<BaseNodeData>>[]) => {
       const lockedNodeIds = new Set(
@@ -968,10 +969,10 @@ function CanvasInner() {
       );
       if (unlockedChanges.length === 0) return;
 
-      // 鎶婂惛闄勫悗鐨勪綅缃洿鎺ユ敞鍏?React Flow 鐨勫彉鏇寸绾?
-      // 锛堟垚涓哄敮涓€鐪熺浉婧愶紝閬垮厤浜屾 setNodes 瑕嗙洊瀵艰嚧鐨勬紓绉?姗＄毊绛嬶級銆?
-      // 娉ㄦ剰锛氭澗鎵嬮偅涓€甯?dragging=false 涔熻鍚搁檮锛屽惁鍒欎細寮瑰洖鍘熷钀界偣锛堜綅绉伙級銆?
-      // applySnap 鍦ㄩ潪鎷栨嫿鏈燂紙dragCtx 涓虹┖锛夋槸鏃犲壇浣滅敤鐩撮€氾紝鏁呮棤闇€鍒ゆ柇 dragging銆?
+      // 閹跺﹤鎯涢梽鍕倵閻ㄥ嫪缍呯純顔炬纯閹恒儲鏁為崗?React Flow 閻ㄥ嫬褰夐弴瀵割吀缁?
+      // 閿涘牊鍨氭稉鍝勬暜娑撯偓閻喓娴夊┃鎰剁礉闁灝鍘ゆ禍灞绢偧 setNodes 鐟曞棛娲婄€佃壈鍤ч惃鍕磽缁?濮楋紕姣婄粵瀣剁礆閵?
+      // 濞夈劍鍓伴敍姘緱閹靛鍋呮稉鈧敮?dragging=false 娑旂喕顩﹂崥鎼佹閿涘苯鎯侀崚娆庣窗瀵懓娲栭崢鐔奉潗閽€鐣屽仯閿涘牅缍呯粔浼欑礆閵?
+      // applySnap 閸︺劑娼幏鏍ㄥ閺堢噦绱檇ragCtx 娑撹櫣鈹栭敍澶嬫Ц閺冪姴澹囨担婊呮暏閻╂挳鈧熬绱濋弫鍛￥闂団偓閸掋倖鏌?dragging閵?
       const draggingPosChanges = unlockedChanges.filter(
         (c) => c.type === 'position' && c.position,
       );
@@ -998,13 +999,13 @@ function CanvasInner() {
         }
       }
 
-      // Detect group node removals 鈥?convert to ungroup
+      // Detect group node removals 閳?convert to ungroup
       const removedIds = snapped
         .filter((c) => c.type === 'remove')
         .map((c) => c.id);
 
-      // 蹇€熻矾寰勶細绾嫋鎷?閫夋嫨鍙樻洿锛堟棤鍒犻櫎锛夆€斺€?鐢ㄥ嚱鏁板紡鏇存柊锛屽缁堝熀浜庢渶鏂?
-      // store.nodes锛岄伩鍏嶅揩閫熸嫋鍔ㄦ椂闂寘 nodes 杩囨湡瀵艰嚧鐨勬姈鍔ㄥ崱椤裤€?
+      // 韫囶偊鈧喕鐭惧鍕剁窗缁绢垱瀚嬮幏?闁瀚ㄩ崣妯绘纯閿涘牊妫ら崚鐘绘珟閿涘鈧柡鈧?閻劌鍤遍弫鏉跨础閺囧瓨鏌婇敍灞筋潗缂佸牆鐔€娴滃孩娓堕弬?
+      // store.nodes閿涘矂浼╅崗宥呮彥闁喐瀚嬮崝銊︽闂傤厼瀵?nodes 鏉╁洦婀＄€佃壈鍤ч惃鍕閸斻劌宕辨い瑁も偓?
       if (removedIds.length === 0) {
         useAppStore.setState((s) => ({
           nodes: applyNodeChanges(snapped, s.nodes) as RFNode<BaseNodeData>[],
@@ -1017,7 +1018,7 @@ function CanvasInner() {
     [applySnap, applyStableNodeChanges],
   );
 
-  // 鈹€鈹€ 鎷栧叆瀹牸鍒嗛暅锛氳繘鍏ヨ妭鐐硅寖鍥存樉绀虹缉鐣ュ浘锛屽彧鏈夌┖鏍煎厑璁告斁缃?鈹€鈹€
+  // 閳光偓閳光偓 閹锋牕鍙嗙€诡偅鐗搁崚鍡涙殔閿涙俺绻橀崗銉ㄥΝ閻愮瀵栭崶瀛樻▔缁€铏圭級閻ｃ儱娴橀敍灞藉涧閺堝鈹栭弽鐓庡帒鐠佸憡鏂佺純?閳光偓閳光偓
   const sbDropTarget = useRef<HTMLElement | null>(null);
   const [dropGhost, setDropGhost] = useState<{
     url: string;
@@ -1056,8 +1057,8 @@ function CanvasInner() {
   }, []);
 
   /**
-   * 鍛戒腑鍒嗛暅琛ㄧ殑鐢婚潰鏍笺€?
-   * 涓庡鏍间笉鍚岋紝宸茬粦瀹氱殑鏍煎瓙涔熸帴鍙楁斁缃€斺€旂洿鎺ユ崲缁戯紝姣斿厛瑙ｇ粦鍐嶆嫋涓€娆￠『鎵嬨€?
+   * 閸涙垝鑵戦崚鍡涙殔鐞涖劎娈戦悽濠氭桨閺嶇鈧?
+   * 娑撳骸顔傞弽闂寸瑝閸氬矉绱濆鑼拨鐎规氨娈戦弽鐓庣摍娑旂喐甯撮崣妤佹杹缂冾喒鈧柡鈧梻娲块幒銉﹀床缂佹埊绱濆В鏂垮帥鐟欙絿绮﹂崘宥嗗珛娑撯偓濞嗭繝銆庨幍瀣ㄢ偓?
    */
   const findShotlistDropHit = useCallback((
     node: RFNode,
@@ -1076,7 +1077,7 @@ function CanvasInner() {
     return null;
   }, []);
 
-  // 鎸夐紶鏍囦綅缃懡涓鏍艰妭鐐逛笌鐪熷疄绌烘牸锛屽吋瀹圭缉鏀惧拰闈炲潎鍖€鑷畾涔夊鏍笺€?
+  // 閹稿绱堕弽鍥︾秴缂冾喖鎳℃稉顓烆唫閺嶈壈濡悙閫涚瑢閻喎鐤勭粚鐑樼壐閿涘苯鍚嬬€瑰湱缂夐弨鎯ф嫲闂堢偛娼庨崠鈧懛顏勭暰娑斿顔傞弽绗衡偓?
   const findStoryboardDropHit = useCallback((
     node: RFNode,
     clientX: number,
@@ -1122,7 +1123,7 @@ function CanvasInner() {
         clearSbDropTarget();
         if (cell) { cell.classList.add('sb-cell--drop-target'); sbDropTarget.current = cell; }
       }
-      // 杩涘叆瀹牸鑺傜偣鍚庨殣钘忕湡瀹炶妭鐐癸紱绌烘牸涓婂€炬枩琛ㄧず鍙斁缃紝鍗犵敤鍖哄煙淇濇寔姘村钩銆?
+      // 鏉╂稑鍙嗙€诡偅鐗搁懞鍌滃仯閸氬酣娈ｉ挊蹇曟埂鐎圭偠濡悙鐧哥幢缁岀儤鐗告稉濠傗偓鐐灘鐞涖劎銇氶崣顖涙杹缂冾噯绱濋崡鐘垫暏閸栧搫鐓欐穱婵囧瘮濮樻潙閽╅妴?
       const url = (node.data?.imageUrl || node.data?.thumbnailUrl) as string | undefined;
       if (hit && url) {
         setDropGhost({ url, x: e.clientX, y: e.clientY, canDrop: cell != null });
@@ -1136,7 +1137,7 @@ function CanvasInner() {
         clearGhostNodeHidden();
       }
 
-      // 鍒嗛暅琛ㄧ敾闈㈡牸锛氬彧鍋氶珮浜紝涓嶉殣钘忚鎷栫殑鑺傜偣鈥斺€旂粦瀹氬悗瀹冧粛瑕佺暀鍦ㄧ敾甯冧笂
+      // 閸掑棝鏆呯悰銊ф暰闂堛垺鐗搁敍姘涧閸嬫岸鐝禍顕嗙礉娑撳秹娈ｉ挊蹇氼潶閹锋牜娈戦懞鍌滃仯閳ユ柡鈧梻绮︾€规艾鎮楃€瑰啩绮涚憰浣烘殌閸︺劎鏁剧敮鍐х瑐
       const frameCell = findShotlistDropHit(node, e.clientX, e.clientY);
       if (frameCell !== shotlistDropTarget.current) {
         clearShotlistDropTarget();
@@ -1149,7 +1150,7 @@ function CanvasInner() {
     [findStoryboardDropHit, clearSbDropTarget, clearGhostNodeHidden, findShotlistDropHit, clearShotlistDropTarget, clearFolderDropTarget],
   );
 
-  // 鈹€鈹€ Auto group/ungroup on drag stop 鈹€鈹€
+  // 閳光偓閳光偓 Auto group/ungroup on drag stop 閳光偓閳光偓
   const handleNodeDragStop = useCallback(
     (event: React.MouseEvent, node: RFNode) => {
       setCanvasInteraction('node', false);
@@ -1241,12 +1242,12 @@ function CanvasInner() {
             variant={BackgroundVariant.Dots}
             gap={20}
             size={1}
-            color="var(--theme-hover)"
-          />
+            color={canvasBackground === 'off-white' ? 'rgba(51,54,77,0.18)' : 'var(--theme-hover)'}
+            />
         )}
 
 
-        {/* Mini Map 鈥?interactive navigator, toggle with M key */}
+        {/* Mini Map 閳?interactive navigator, toggle with M key */}
         {minimapVisible && (
           <>
             <MiniMap
@@ -1274,7 +1275,7 @@ function CanvasInner() {
           showInteractive={false}
         />
 
-        {/* 鎿嶄綔璁板綍 鈥?鎾ら攢 / 杩樺師 + 鍙洖婧殑鎿嶄綔鍒楄〃 */}
+        {/* 閹垮秳缍旂拋鏉跨秿 閳?閹俱倝鏀?/ 鏉╂ê甯?+ 閸欘垰娲栧┃顖滄畱閹垮秳缍旈崚妤勩€?*/}
         <Panel position="top-right" className="canvas-history-slot">
           <HistoryTimelinePanel />
         </Panel>
@@ -1419,7 +1420,7 @@ function CanvasInner() {
       <MultiSelectToolbar />
     </div>
 
-    {/* 鎷栧叆瀹牸锛氳妭鐐硅寖鍥村唴鏄剧ず缂╃暐鍥撅紝绌烘牸涓婂€炬枩琛ㄧず鍙斁缃?*/}
+    {/* 閹锋牕鍙嗙€诡偅鐗搁敍姘冲Ν閻愮瀵栭崶鏉戝敶閺勫墽銇氱紓鈺冩殣閸ユ拝绱濈粚鐑樼壐娑撳﹤鈧偓鏋╃悰銊с仛閸欘垱鏂佺純?*/}
     {dropGhost && createPortal(
       <div
         className={`sb-drag-ghost${dropGhost.canDrop ? '' : ' sb-drag-ghost--over-storyboard'}`}
