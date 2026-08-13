@@ -2,7 +2,6 @@
  * CanvasBackground — 根据 config.canvasBackground 渲染对应的画布背景主题
  */
 import { useAppStore } from '../../store/useAppStore';
-import { useAppStore } from '../../store/useAppStore';
 
 export default function CanvasBackground() {
   const canvasBackground = useAppStore((s) => s.config.canvasBackground);
