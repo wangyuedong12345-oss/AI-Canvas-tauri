@@ -11,6 +11,8 @@ interface CanvasToolbarProps {
   smoothLine: boolean;
   onToggleGrid: () => void;
   onToggleLine: () => void;
+  onOpenShortcuts: () => void;
+  onFitView: () => void;
 }
 
 const selectZoomPercent = (state: ReactFlowState) => Math.round(state.transform[2] * 100);
@@ -49,10 +51,28 @@ function CanvasToolbar({
   smoothLine,
   onToggleGrid,
   onToggleLine,
+  onOpenShortcuts,
+  onFitView,
 }: CanvasToolbarProps) {
   const t = useT();
   return (
     <div className="footer-toolbar flex items-center gap-2 border border-canvas-border backdrop-blur-xl rounded-xl shadow-lg">
+      <AnimatedButton
+        type="button"
+        aria-label={t('快捷键')}
+        className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors text-canvas-text-secondary hover:text-canvas-text hover:bg-canvas-hover"
+        onClick={onOpenShortcuts}
+        data-tooltip={t('快捷键')}
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <rect x="2" y="4" width="20" height="16" rx="2" ry="2" />
+          <line x1="6" y1="8" x2="6.01" y2="8" /><line x1="10" y1="8" x2="10.01" y2="8" />
+          <line x1="14" y1="8" x2="14.01" y2="8" /><line x1="18" y1="8" x2="18.01" y2="8" />
+          <line x1="8" y1="12" x2="8.01" y2="12" /><line x1="12" y1="12" x2="12.01" y2="12" />
+          <line x1="16" y1="12" x2="16.01" y2="12" /><line x1="7" y1="16" x2="17" y2="16" />
+        </svg>
+      </AnimatedButton>
+      <div className="w-px h-4 bg-[var(--separator-color)] mx-0.5" />
       <AnimatedButton
         type="button"
         aria-label={showGrid ? t('隐藏背景网格') : t('显示背景网格')}
@@ -86,6 +106,17 @@ function CanvasToolbar({
             <path d="M4 20 Q12 8 20 4" />
           </svg>
         )}
+      </AnimatedButton>
+      <AnimatedButton
+        type="button"
+        aria-label="适应画布"
+        className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors text-canvas-text-secondary hover:text-canvas-text hover:bg-canvas-hover"
+        onClick={onFitView}
+        data-tooltip="适应画布"
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M15 3h6v6" /><path d="M9 3H3v6" /><path d="M15 21h6v-6" /><path d="M9 21H3v-6" />
+        </svg>
       </AnimatedButton>
       <div className="w-px h-4 bg-[var(--separator-color)] mx-0.5" />
       <ZoomControl />

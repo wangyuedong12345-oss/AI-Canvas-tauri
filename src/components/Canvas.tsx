@@ -5,7 +5,6 @@ import { lazy, Suspense, useCallback, useState, useEffect, useMemo, useRef } fro
 import { createPortal } from 'react-dom';
 import { ReactFlow,
   Background,
-  Controls,
   MiniMap,
   BackgroundVariant,
   ConnectionMode,
@@ -585,6 +584,12 @@ function CanvasInner() {
   }, [closeNodeDialog]);
 
   const toggleGrid = useCallback(() => setShowGrid((v) => !v), []);
+  const fitView = useCallback(() => {
+    reactFlowInstance.fitView({ padding: 0.2, maxZoom: 1 });
+  }, [reactFlowInstance]);
+  const openShortcuts = useCallback(() => {
+    useAppStore.getState().setSettingsOpen(true, 'shortcuts');
+  }, []);
 
   // 閳光偓閳光偓 Connection drop menu 閳光偓閳光偓
   const {
@@ -1269,12 +1274,6 @@ function CanvasInner() {
           </>
         )}
 
-        {/* Canvas Controls */}
-        <Controls
-          className="canvas-controls !bg-canvas-card !border-canvas-border !shadow-lg !rounded-xl overflow-hidden"
-          showInteractive={false}
-        />
-
         {/* 閹垮秳缍旂拋鏉跨秿 閳?閹俱倝鏀?/ 鏉╂ê甯?+ 閸欘垰娲栧┃顖滄畱閹垮秳缍旈崚妤勩€?*/}
         <Panel position="top-right" className="canvas-history-slot">
           <HistoryTimelinePanel />
@@ -1315,6 +1314,8 @@ function CanvasInner() {
             smoothLine={smoothLine}
             onToggleGrid={toggleGrid}
             onToggleLine={() => setSmoothLine((v) => !v)}
+            onOpenShortcuts={openShortcuts}
+            onFitView={fitView}
           />
         </Panel>
 
