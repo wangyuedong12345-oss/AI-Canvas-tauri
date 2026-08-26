@@ -238,6 +238,21 @@
   padding: 4px 8px;
   font-size: 11px;
 }
+.rh-video-ratio-seg .rh-video-ratio-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+}
+.rh-video-ratio-btn.active .img-rp-icon,
+.rh-video-ratio-btn.active .rh-video-ratio-adaptive-icon {
+  color: var(--brand-hover);
+  opacity: 1;
+}
+[data-theme='light'] .rh-video-ratio-btn.active .img-rp-icon,
+[data-theme='light'] .rh-video-ratio-btn.active .rh-video-ratio-adaptive-icon {
+  color: inherit;
+}
 /* 预设 + 自定义输入同排：最后一格是输入框 */
 .rh-res-seg-with-custom {
   grid-template-columns: repeat(5, 1fr);

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   applyProjectDefaultsToNodeData,
+  getVideoNodeDimensionsForAspectRatio,
   normalizeProjectSettings,
 } from '../../src/services/projectSettingsService';
 import {
@@ -33,6 +34,8 @@ describe('项目默认的视频画面比例', () => {
     const applied = applyProjectDefaultsToNodeData(videoNode(), settings);
 
     expect(applied.seedanceRatio).toBe('9:16');
+    expect(applied.nodeWidth).toBe(158);
+    expect(applied.nodeHeight).toBe(280);
   });
 
   it('不覆盖节点上已有的比例', () => {
@@ -95,6 +98,12 @@ describe('视频比例 → 像素尺寸换算', () => {
   it('比例选项同时覆盖横屏与竖屏', () => {
     expect(VIDEO_ASPECT_RATIOS).toContain('16:9');
     expect(VIDEO_ASPECT_RATIOS).toContain('9:16');
+  });
+
+  it('视频节点框体按比例切换，adaptive 不强行改尺寸', () => {
+    expect(getVideoNodeDimensionsForAspectRatio('16:9')).toEqual({ nodeWidth: 280, nodeHeight: 158 });
+    expect(getVideoNodeDimensionsForAspectRatio('9:16')).toEqual({ nodeWidth: 158, nodeHeight: 280 });
+    expect(getVideoNodeDimensionsForAspectRatio('adaptive')).toBeNull();
   });
 });
 

@@ -55,14 +55,51 @@ const SEEDANCE_RESOLUTIONS = [
   { value: '4k', label: '4K' },
 ];
 
-const SEEDANCE_RATIOS = [
-  { value: '16:9', label: '16:9' },
-  { value: '4:3', label: '4:3' },
-  { value: '1:1', label: '1:1' },
-  { value: '3:4', label: '3:4' },
-  { value: '9:16', label: '9:16' },
-  { value: '21:9', label: '21:9' },
-  { value: 'adaptive', label: '自适应' },
+type VideoRatioOption = {
+  value: string;
+  label: string;
+  iconClassName?: string;
+};
+
+const VIDEO_RATIO_ICON_CLASSES: Record<string, string> = {
+  '1:1': 'img-rp-sq',
+  '9:16': 'img-rp-tall',
+  '16:9': 'img-rp-wide',
+  '3:4': 'img-rp-p34',
+  '4:3': 'img-rp-l43',
+  '3:2': 'img-rp-l32',
+  '2:3': 'img-rp-p23',
+  '5:4': 'img-rp-l54',
+  '4:5': 'img-rp-p45',
+  '21:9': 'img-rp-ultra',
+};
+
+// eslint-disable-next-line react-refresh/only-export-components
+export function getVideoRatioIconClass(value: string): string | undefined {
+  return VIDEO_RATIO_ICON_CLASSES[value.trim().toLowerCase()];
+}
+
+// eslint-disable-next-line react-refresh/only-export-components
+export function formatVideoRatioLabel(value: string): string {
+  return value.trim().toLowerCase() === 'adaptive' ? '自适应' : value;
+}
+
+function videoRatioOption(value: string, label = value): VideoRatioOption {
+  return {
+    value,
+    label: formatVideoRatioLabel(label),
+    iconClassName: getVideoRatioIconClass(value),
+  };
+}
+
+const SEEDANCE_RATIOS: VideoRatioOption[] = [
+  videoRatioOption('16:9'),
+  videoRatioOption('4:3'),
+  videoRatioOption('1:1'),
+  videoRatioOption('3:4'),
+  videoRatioOption('9:16'),
+  videoRatioOption('21:9'),
+  videoRatioOption('adaptive', '自适应'),
 ];
 
 const FRAME_ROLE_OPTIONS: Array<{ value: VideoReferenceItem['role']; label: string }> = [
@@ -233,7 +270,7 @@ export default function VideoParamSelector({
     || customUsesAudio
     || !isWorkflowProvider;
   // 非 Seedance（ComfyUI / RunningHub / 自建模型）：比例换算成 width/height 后注入请求
-  const genericRatios = VIDEO_ASPECT_RATIOS.map((value) => ({ value, label: value }));
+  const genericRatios = VIDEO_ASPECT_RATIOS.map((value) => videoRatioOption(value));
   const showGenericRatio = showSeedanceRatio;
   const genericRatio = genericRatios.some((item) => item.value === seedanceRatio)
     ? seedanceRatio
@@ -243,7 +280,7 @@ export default function VideoParamSelector({
     ? seedanceCapability.resolutions.map((value) => ({ value, label: value === '4k' ? '4K' : value }))
     : SEEDANCE_RESOLUTIONS;
   const seedanceRatios = seedanceCapability
-    ? seedanceCapability.ratios.map((value) => ({ value, label: value }))
+    ? seedanceCapability.ratios.map((value) => videoRatioOption(value))
     : isNativeSeedance || !isWorkflowProvider
       ? SEEDANCE_RATIOS
       : genericRatios;
@@ -374,10 +411,12 @@ export default function VideoParamSelector({
   }, [open]);
 
   // ── 触发按钮文案 ──
+  const ratioLabel = formatVideoRatioLabel(displayedRatio);
+  const genericRatioLabel = formatVideoRatioLabel(genericRatio);
   const durationLabelParts = [
     showResolutionControl ? displayedResolution : '',
     showDurationControl ? `时长${displayedDuration}s` : '',
-    showRatioControl ? displayedRatio : '',
+    showRatioControl ? ratioLabel : '',
     showFrameRateControl ? `${displayedFrameRate}帧` : '',
   ].filter(Boolean);
   const durationTriggerLabel = durationLabelParts.length > 0
@@ -386,7 +425,7 @@ export default function VideoParamSelector({
   const triggerLabel = usesDurationControls
     ? durationTriggerLabel
     : showGenericRatio
-      ? `${genericRatio} · ${videoResolution} · 时长${displayedDuration}s`
+      ? `${genericRatioLabel} · ${videoResolution} · 时长${displayedDuration}s`
       : `时长${displayedDuration}s · 帧率${videoFps} · 分辨率${videoResolution}`;
 
   return (
@@ -535,15 +574,24 @@ export default function VideoParamSelector({
                       宽高比
                       <span className="rh-tip" data-tooltip="决定输出视频的画面形状：16:9 横屏、9:16 竖屏，自适应 = 由模型智能决定。">!</span>
                     </div>
-                    <div className="img-rp-quality-segmented rh-video-resolution-seg">
+                    <div className="img-rp-quality-segmented rh-video-resolution-seg rh-video-ratio-seg">
                       {seedanceRatios.map((opt) => (
                         <AnimatedButton
                           key={opt.value}
                           type="button"
-                          className={`img-rp-quality-item rh-v5-res-btn ui-schema-option ${displayedRatio === opt.value ? 'active' : ''}`}
+                          className={`img-rp-quality-item rh-v5-res-btn rh-video-ratio-btn ui-schema-option ${displayedRatio === opt.value ? 'active' : ''}`}
                           onClick={() => onChangeSeedanceRatio?.(opt.value)}
                         >
-                          {opt.label}
+                          {opt.iconClassName ? (
+                            <span className={`img-rp-icon ${opt.iconClassName}`} aria-hidden="true" />
+                          ) : (
+                            <svg className="rh-video-ratio-adaptive-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                              <rect x="3" y="3" width="18" height="18" rx="2" />
+                              <path d="M3 9h18" />
+                              <path d="M9 21V9" />
+                            </svg>
+                          )}
+                          <span>{opt.label}</span>
                         </AnimatedButton>
                       ))}
                     </div>
@@ -661,15 +709,16 @@ export default function VideoParamSelector({
                       画面比例
                       <span className="rh-tip" data-tooltip="决定输出视频的画面形状：16:9 横屏、9:16 竖屏。分辨率为长边，短边按比例换算后注入工作流的 width/height。">!</span>
                     </div>
-                    <div className="img-rp-quality-segmented rh-video-resolution-seg">
+                    <div className="img-rp-quality-segmented rh-video-resolution-seg rh-video-ratio-seg">
                       {genericRatios.map((opt) => (
                         <AnimatedButton
                           key={opt.value}
                           type="button"
-                          className={`img-rp-quality-item rh-v5-res-btn ui-schema-option ${genericRatio === opt.value ? 'active' : ''}`}
+                          className={`img-rp-quality-item rh-v5-res-btn rh-video-ratio-btn ui-schema-option ${genericRatio === opt.value ? 'active' : ''}`}
                           onClick={() => onChangeSeedanceRatio?.(opt.value)}
                         >
-                          {opt.label}
+                          {opt.iconClassName && <span className={`img-rp-icon ${opt.iconClassName}`} aria-hidden="true" />}
+                          <span>{opt.label}</span>
                         </AnimatedButton>
                       ))}
                     </div>

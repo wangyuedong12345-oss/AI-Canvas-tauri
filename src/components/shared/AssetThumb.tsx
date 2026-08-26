@@ -18,6 +18,25 @@ interface AssetThumbProps {
 }
 
 export default function AssetThumb({ assetUrl, name, category, size, badge, children }: AssetThumbProps) {
+  if (assetUrl && category === 'video') {
+    return (
+      <div className="assets-card-img-wrap">
+        <video
+          src={assetUrl}
+          className="assets-card-img"
+          controls
+          muted
+          playsInline
+          preload="metadata"
+          title={name}
+        />
+        <span className="assets-card-size">{formatSize(size)}</span>
+        {badge && <span className="assets-card-badge">{badge}</span>}
+        {children}
+      </div>
+    );
+  }
+
   return assetUrl ? (
     <div className="assets-card-img-wrap">
       <img src={assetUrl} alt={name} className="assets-card-img" loading="lazy" decoding="async" draggable={false} />

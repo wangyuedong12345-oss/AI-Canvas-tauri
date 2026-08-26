@@ -201,6 +201,13 @@ export function getImageNodeDimensionsForAspectRatio(
     : { nodeWidth: Math.round(maxDimension * (width / height)), nodeHeight: maxDimension };
 }
 
+export function getVideoNodeDimensionsForAspectRatio(
+  aspectRatio: string,
+): { nodeWidth: number; nodeHeight: number } | null {
+  if (aspectRatio === 'adaptive') return null;
+  return getImageNodeDimensionsForAspectRatio(aspectRatio);
+}
+
 export function applyProjectDefaultsToNodeData(
   data: BaseNodeData,
   settings: ProjectSettings | undefined,
@@ -241,6 +248,8 @@ export function applyProjectDefaultsToNodeData(
   if (data.type === 'ai-video') {
     if (settings.generation?.videoAspectRatio && (!hasPrompt || !data.seedanceRatio)) {
       next.seedanceRatio = settings.generation.videoAspectRatio;
+      const dimensions = getVideoNodeDimensionsForAspectRatio(next.seedanceRatio);
+      if (dimensions) Object.assign(next, dimensions);
     }
     if (settings.generation?.videoResolution && (!hasPrompt || !data.seedanceResolution)) {
       next.seedanceResolution = settings.generation.videoResolution;

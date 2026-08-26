@@ -27,6 +27,7 @@ import {
 } from '../../services/canvasViewportService';
 import {
   getImageNodeDimensionsForAspectRatio,
+  getVideoNodeDimensionsForAspectRatio,
   resolveProjectGenerationPrompt,
 } from '../../services/projectSettingsService';
 import {
@@ -819,7 +820,13 @@ function AINodeDialog() {
   );
 
   const onChangeSeedanceRatio = useCallback(
-    (value: string) => updateNodeData(activeNodeId!, { seedanceRatio: value }),
+    (value: string) => {
+      const updateData: Partial<BaseNodeData> = { seedanceRatio: value };
+      const dimensions = getVideoNodeDimensionsForAspectRatio(value);
+      if (dimensions) Object.assign(updateData, dimensions);
+
+      updateNodeData(activeNodeId!, updateData);
+    },
     [activeNodeId, updateNodeData]
   );
 

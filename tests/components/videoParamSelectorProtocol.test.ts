@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { modelProtocolUsesVariable } from '../../src/services/ai/modelProtocol';
 import { analyzeModelProtocolExamples } from '../../src/services/ai/modelProtocolImport';
-import { resolveGeneralVideoModel } from '../../src/components/nodes/shared/VideoParamSelector';
+import {
+  formatVideoRatioLabel,
+  getVideoRatioIconClass,
+  resolveGeneralVideoModel,
+} from '../../src/components/nodes/shared/VideoParamSelector';
 
 describe('VideoParamSelector 自定义协议参数识别', () => {
   it('按协议变量识别任意厂商视频模型的比例、分辨率和秒数控件', () => {
@@ -50,5 +54,18 @@ curl https://api.paipu.net/v1/videos \\
       .toBe(models[0]);
     expect(resolveGeneralVideoModel(models, 'custom-video/lec-h3video-2k', 'custom-video'))
       .toBe(models[0]);
+  });
+
+  it('给视频比例选项提供和图片节点一致的图形提示', () => {
+    expect(getVideoRatioIconClass('16:9')).toBe('img-rp-wide');
+    expect(getVideoRatioIconClass('9:16')).toBe('img-rp-tall');
+    expect(getVideoRatioIconClass('1:1')).toBe('img-rp-sq');
+    expect(getVideoRatioIconClass('adaptive')).toBeUndefined();
+  });
+
+  it('把 adaptive 比例显示为中文自适应', () => {
+    expect(formatVideoRatioLabel('adaptive')).toBe('自适应');
+    expect(formatVideoRatioLabel('Adaptive')).toBe('自适应');
+    expect(formatVideoRatioLabel('16:9')).toBe('16:9');
   });
 });
