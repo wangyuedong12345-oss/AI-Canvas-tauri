@@ -55,6 +55,24 @@ describe('parseMultiPathResponse', () => {
     );
     expect(parsed).toBe('https://cdn.test/from-data.png');
   });
+
+  it('reads common async media url fields from object envelopes', () => {
+    expect(parseMultiPathResponse({
+      data: {
+        video_url: 'https://cdn.test/from-data-video.mp4',
+      },
+    }, 'videos')).toBe('https://cdn.test/from-data-video.mp4');
+    expect(parseMultiPathResponse({
+      result: {
+        url: 'https://cdn.test/from-result.mp4',
+      },
+    }, 'videos')).toBe('https://cdn.test/from-result.mp4');
+    expect(parseMultiPathResponse({
+      output: {
+        video_url: ['https://cdn.test/a.mp4, https://cdn.test/b.mp4'],
+      },
+    }, 'videos')).toBe('https://cdn.test/a.mp4');
+  });
 });
 
 describe('buildComfyFileUrl', () => {

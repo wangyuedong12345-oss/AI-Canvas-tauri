@@ -1,7 +1,7 @@
 /** Model-level declarative protocol runtime with resumable async polling. */
 import { useAppStore } from '../../store/useAppStore';
 import type { GeneralModelCategory, GeneralModelConfig, NodeType } from '../../types';
-import type { ProtocolJsonValue } from '../../types/aiTypes';
+import type { NormalizedModelExecutionProtocol, ProtocolJsonValue } from '../../types/aiTypes';
 import {
   cleanupNodePolling,
   registerNodePolling,
@@ -37,6 +37,68 @@ function readBatchCount(value: ProtocolJsonValue | undefined): number {
     : 1;
 }
 
+function hasProtocolImageReferences(variables: ModelProtocolVariables): boolean {
+  const imageUrls = variables.imageUrls;
+  const referenceImageUrls = variables.referenceImageUrls;
+  const imageWithRoles = variables.imageWithRoles;
+  const seedanceContent = variables.seedanceContent;
+  return (Array.isArray(imageUrls) && imageUrls.length > 0)
+    || (Array.isArray(referenceImageUrls) && referenceImageUrls.length > 0)
+    || (Array.isArray(imageWithRoles) && imageWithRoles.length > 0)
+    || (Array.isArray(seedanceContent) && seedanceContent.length > 0);
+}
+
+function hasProtocolAspectRatio(variables: ModelProtocolVariables): boolean {
+  return typeof variables.aspectRatio === 'string' && variables.aspectRatio.trim() !== ''
+    || typeof variables.seedanceRatio === 'string' && variables.seedanceRatio.trim() !== '';
+}
+
+function isDoubaoSeedanceVideoModel(model: GeneralModelConfig, category: Exclude<GeneralModelCategory, 'text'>): boolean {
+  if (category !== 'video') return false;
+  const haystack = `${model.name} ${model.modelId}`.toLowerCase();
+  return haystack.includes('doubao') && haystack.includes('seedance');
+}
+
+function withDoubaoSeedanceImageFallback(
+  protocol: NormalizedModelExecutionProtocol,
+  model: GeneralModelConfig,
+  category: Exclude<GeneralModelCategory, 'text'>,
+  variables: ModelProtocolVariables,
+): NormalizedModelExecutionProtocol {
+  if (!isDoubaoSeedanceVideoModel(model, category) || !hasProtocolImageReferences(variables)) {
+    return protocol;
+  }
+  const protocolSource = JSON.stringify(protocol);
+  const needsContent = !modelProtocolUsesVariable(protocolSource, 'seedanceContent', 'imageWithRoles');
+  const needsRatio = hasProtocolAspectRatio(variables)
+    && !modelProtocolUsesVariable(protocolSource, 'aspectRatio', 'seedanceRatio');
+  if (!needsContent && !needsRatio) {
+    return protocol;
+  }
+  const next = structuredClone(protocol);
+  const body = next.submit.body;
+  if (body && (typeof body !== 'object' || Array.isArray(body))) {
+    return protocol;
+  }
+  const bodyObject = (body ?? {}) as Record<string, ProtocolJsonValue>;
+  const nextBody = { ...bodyObject };
+  if (needsContent) {
+    delete nextBody.image;
+    delete nextBody.images;
+    delete nextBody.imageUrls;
+    delete nextBody.image_urls;
+    delete nextBody.reference_images;
+    delete nextBody.referenceImageUrls;
+    delete nextBody.reference_image_urls;
+  }
+  next.submit.body = {
+    ...nextBody,
+    ...(needsContent ? { content: '{{seedanceContent}}' } : {}),
+    ...(needsRatio ? { ratio: '{{aspectRatio}}' } : {}),
+  };
+  return next;
+}
+
 /**
  * 连线带了参考素材、但该模型的调用协议里一个参考字段都没有。
  * 中转站文档常常只给纯文生图 / 文生视频示例，导入后参考素材无处可去。
@@ -54,7 +116,7 @@ export function findUnusedReferenceVariables(
 
 /** 参考素材变量 → 请求体里该写成什么样，给用户一个能直接抄的修法。 */
 const REFERENCE_FIELD_HINTS: Array<{ variable: string; kind: string; example: string }> = [
-  { variable: 'imageUrls', kind: '参考图', example: '"images": "{{imageUrls}}"' },
+  { variable: 'imageUrls', kind: '参考图', example: '"content": "{{seedanceContent}}"' },
   { variable: 'videoUrls', kind: '参考视频', example: '"video_urls": "{{videoUrls}}"' },
   { variable: 'audioUrls', kind: '参考音频', example: '"audio_urls": "{{audioUrls}}"' },
 ];
@@ -90,8 +152,14 @@ function assertReferenceMediaDeliverable(
 export async function runConfiguredModelProtocol(
   options: RunConfiguredModelProtocolOptions,
 ): Promise<string[]> {
-  const protocol = resolveModelExecutionProfile(options.model.executionProfile);
-  if (!protocol) throw new Error(`模型“${options.model.name}”未配置调用协议`);
+  const resolvedProtocol = resolveModelExecutionProfile(options.model.executionProfile);
+  if (!resolvedProtocol) throw new Error(`模型“${options.model.name}”未配置调用协议`);
+  const protocol = withDoubaoSeedanceImageFallback(
+    resolvedProtocol,
+    options.model,
+    options.category,
+    options.variables,
+  );
   const provider = useAppStore.getState().config.providers[options.model.providerConfigId];
   if (!provider) throw new Error(`模型“${options.model.name}”的连接配置不存在`);
   const baseUrl = provider.baseUrl?.trim() || '';

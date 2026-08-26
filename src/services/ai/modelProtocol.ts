@@ -58,6 +58,31 @@ const DEFAULT_RETRY_HTTP_STATUSES = [408, 429, 500, 502, 503, 504];
 const DEFAULT_MAX_QUERY_RETRIES = 3;
 const DEFAULT_MAX_RETRY_DELAY_MS = 60000;
 const MIME_TYPE_RE = /^[a-zA-Z0-9][a-zA-Z0-9!#$&^_.+-]*\/[a-zA-Z0-9][a-zA-Z0-9!#$&^_.+-]*$/;
+const FALLBACK_RESULT_URL_PATHS = [
+  'url',
+  'video_url',
+  'audio_url',
+  'image_url',
+  'result_url',
+  'data.url',
+  'data.video_url',
+  'data.audio_url',
+  'data.image_url',
+  'data.result_url',
+  'data.*.url',
+  'data.*.video_url',
+  'result.url',
+  'result.video_url',
+  'result.audio_url',
+  'result.image_url',
+  'result.result_url',
+  'output.url',
+  'output.video_url',
+  'output.audio_url',
+  'output.image_url',
+  'metadata.url',
+  'metadata.video_url',
+];
 
 export type ModelProtocolVariables = Record<string, ProtocolJsonValue | undefined>;
 
@@ -1151,6 +1176,20 @@ function normalizeStatus(value: unknown): string {
   return typeof value === 'string' ? value.trim().toLowerCase() : String(value ?? '').toLowerCase();
 }
 
+function readModelProtocolUrlsWithFallback(
+  payload: ProtocolJsonValue,
+  path: string | undefined,
+): string[] {
+  const configured = path ? readModelProtocolUrls(payload, path) : [];
+  if (configured.length > 0) return configured;
+  for (const fallbackPath of FALLBACK_RESULT_URL_PATHS) {
+    if (fallbackPath === path) continue;
+    const urls = readModelProtocolUrls(payload, fallbackPath);
+    if (urls.length > 0) return urls;
+  }
+  return [];
+}
+
 export function getDefaultModelProtocolPollRetryConfig(): Required<ModelProtocolPollRetryConfig> {
   return {
     httpStatuses: [...DEFAULT_RETRY_HTTP_STATUSES],
@@ -1317,7 +1356,7 @@ export async function pollResolvedModelProtocol(
     isComplete: (payload) => {
       const status = normalizeStatus(readModelProtocolFirstScalar(payload, poll.statusPath));
       if (!successValues.has(status)) return null;
-      const urls = poll.resultUrlPath ? readModelProtocolUrls(payload, poll.resultUrlPath) : [];
+      const urls = readModelProtocolUrlsWithFallback(payload, poll.resultUrlPath);
       const base64Urls = poll.resultBase64Path
         ? readModelProtocolUrls(payload, poll.resultBase64Path).map((value) =>
             normalizeBase64Result(value, poll.resultMimeType!, poll.resultBase64Transform))

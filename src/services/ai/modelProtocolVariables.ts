@@ -131,6 +131,12 @@ export const PROTOCOL_VARIABLES: readonly ProtocolVariableSpec[] = [
 
   // ── 参考素材 ──
   {
+    name: 'seedanceContent', supplied: VIDEO,
+    reference: true,
+    categories: VIDEO,
+    // Doubao Seedance 官方 content 数组，图片项带 role（first_frame / last_frame / reference_image）。
+  },
+  {
     name: 'imageWithRoles', supplied: VIDEO,
     reference: true,
     categories: VIDEO,

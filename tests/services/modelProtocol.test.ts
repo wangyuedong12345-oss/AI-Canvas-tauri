@@ -888,6 +888,28 @@ describe('declarative model execution protocol', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
+  it('falls back to common completed media url fields when the configured poll path is stale', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse({
+      status: 'completed',
+      data: {
+        video_url: 'https://cdn.example/from-data-video-url.mp4',
+      },
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await pollResolvedModelProtocol({
+      method: 'GET',
+      url: 'https://apihub.agnes-ai.com/agnesapi?video_id=video-1',
+      statusPath: 'status',
+      successValues: ['completed'],
+      failureValues: ['failed'],
+      resultUrlPath: 'data.0.url',
+      intervalMs: 1,
+    }, 'secret', undefined, 'https://apihub.agnes-ai.com/v1');
+
+    expect(result.urls).toEqual(['https://cdn.example/from-data-video-url.mp4']);
+  });
+
   it('retries configured transient status responses and resets after success', async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(jsonResponse({ message: 'temporarily unavailable' }, 503))
@@ -1221,7 +1243,7 @@ describe('undeliverable reference media', () => {
       model,
       category: 'video',
       variables: { model: 'lec-seed-2-0-900', prompt: '图片1, 释放法术', imageUrls: ['https://cdn.example/a.png'] },
-    })).rejects.toThrow('"images": "{{imageUrls}}"');
+    })).rejects.toThrow('"content": "{{seedanceContent}}"');
 
     // 没有参考素材时照常放行（会走到网络层，这里只验证没被参考素材检查拦下）
     await expect(runConfiguredModelProtocol({
@@ -1229,5 +1251,142 @@ describe('undeliverable reference media', () => {
       category: 'video',
       variables: { model: 'lec-seed-2-0-900', prompt: '释放法术', imageUrls: [] },
     })).rejects.not.toThrow('没有接收参考图');
+  });
+
+  it('Doubao Seedance 视频协议缺少参考图和比例字段时自动补 content 与 ratio', async () => {
+    useAppStore.setState({
+      configHydrated: true,
+      config: {
+        ...useAppStore.getState().config,
+        providers: {
+          'max-api': {
+            name: 'MAX-API', apiKey: 'k', baseUrl: 'https://max-api.example/v1',
+            catalogId: 'custom-openai', selectedModels: [],
+          },
+        },
+      },
+    } as never);
+    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse({ url: 'https://cdn.example/video.mp4' }));
+    vi.stubGlobal('fetch', fetchMock);
+    const model = {
+      id: 'seedance-mini',
+      name: 'Doubao-Seedance-2.0-mini',
+      modelId: 'doubao-seedance-2-0-mini-260615',
+      category: 'video' as const,
+      providerConfigId: 'max-api',
+      executionProfile: {
+        preset: 'custom' as const,
+        protocol: {
+          version: 2 as const,
+          mode: 'sync' as const,
+          submit: { method: 'POST' as const, path: '/videos', body: { model: '{{model}}', prompt: '{{prompt}}' } },
+          response: { type: 'json' as const, result: { urlPath: 'url' } },
+        },
+      },
+    };
+
+    await expect(runConfiguredModelProtocol({
+      model,
+      category: 'video',
+      variables: {
+        model: 'doubao-seedance-2-0-mini-260615',
+        prompt: '让图片1动起来',
+        aspectRatio: '9:16',
+        seedanceRatio: '9:16',
+        imageUrls: ['data:image/png;base64,aaaa'],
+        seedanceContent: [
+          { type: 'text', text: '让图片1动起来' },
+          {
+            type: 'image_url',
+            image_url: { url: 'data:image/png;base64,aaaa' },
+            role: 'first_frame',
+          },
+        ],
+      },
+    })).resolves.toEqual(['https://cdn.example/video.mp4']);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toEqual({
+      model: 'doubao-seedance-2-0-mini-260615',
+      prompt: '让图片1动起来',
+      content: [
+        { type: 'text', text: '让图片1动起来' },
+        {
+          type: 'image_url',
+          image_url: { url: 'data:image/png;base64,aaaa' },
+          role: 'first_frame',
+        },
+      ],
+      ratio: '9:16',
+    });
+  });
+
+  it('Doubao Seedance 视频协议已有比例字段时不覆盖', async () => {
+    useAppStore.setState({
+      configHydrated: true,
+      config: {
+        ...useAppStore.getState().config,
+        providers: {
+          'max-api': {
+            name: 'MAX-API', apiKey: 'k', baseUrl: 'https://max-api.example/v1',
+            catalogId: 'custom-openai', selectedModels: [],
+          },
+        },
+      },
+    } as never);
+    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse({ url: 'https://cdn.example/video.mp4' }));
+    vi.stubGlobal('fetch', fetchMock);
+    const model = {
+      id: 'seedance-mini',
+      name: 'Doubao-Seedance-2.0-mini',
+      modelId: 'doubao-seedance-2-0-mini-260615',
+      category: 'video' as const,
+      providerConfigId: 'max-api',
+      executionProfile: {
+        preset: 'custom' as const,
+        protocol: {
+          version: 2 as const,
+          mode: 'sync' as const,
+          submit: {
+            method: 'POST' as const,
+            path: '/videos',
+            body: { model: '{{model}}', prompt: '{{prompt}}', ratio: '{{seedanceRatio}}' },
+          },
+          response: { type: 'json' as const, result: { urlPath: 'url' } },
+        },
+      },
+    };
+
+    await runConfiguredModelProtocol({
+      model,
+      category: 'video',
+      variables: {
+        model: 'doubao-seedance-2-0-mini-260615',
+        prompt: '让图片1动起来',
+        aspectRatio: '9:16',
+        seedanceRatio: '9:16',
+        imageUrls: ['data:image/png;base64,aaaa'],
+        seedanceContent: [
+          {
+            type: 'image_url',
+            image_url: { url: 'data:image/png;base64,aaaa' },
+            role: 'reference_image',
+          },
+        ],
+      },
+    });
+
+    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toEqual({
+      model: 'doubao-seedance-2-0-mini-260615',
+      prompt: '让图片1动起来',
+      content: [
+        {
+          type: 'image_url',
+          image_url: { url: 'data:image/png;base64,aaaa' },
+          role: 'reference_image',
+        },
+      ],
+      ratio: '9:16',
+    });
   });
 });

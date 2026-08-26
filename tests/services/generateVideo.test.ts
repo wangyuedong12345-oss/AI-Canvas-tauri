@@ -692,6 +692,11 @@ describe('general video protocol variables', () => {
       { url: 'https://cdn.example/first.png', role: 'first_frame' },
       { url: 'https://cdn.example/role.png', role: 'reference_image' },
     ]);
+    expect(withRoles.seedanceContent).toEqual([
+      { type: 'text', text: 'prompt' },
+      { type: 'image_url', image_url: { url: 'https://cdn.example/first.png' }, role: 'first_frame' },
+      { type: 'image_url', image_url: { url: 'https://cdn.example/role.png' }, role: 'reference_image' },
+    ]);
 
     // 没有参考素材时置 undefined，模板才会省略 image_with_roles 而不是发出空数组
     const withoutRoles = buildGeneralVideoProtocolVariables(
@@ -700,6 +705,7 @@ describe('general video protocol variables', () => {
       { prompt: 'prompt', imageUrls: [], videoUrls: [], audioUrls: [], operation: 'text-to-video' },
     );
     expect(withoutRoles.imageWithRoles).toBeUndefined();
+    expect(withoutRoles.seedanceContent).toBeUndefined();
   });
 
   it('provides usable defaults and omits a last frame when only one image is present', () => {

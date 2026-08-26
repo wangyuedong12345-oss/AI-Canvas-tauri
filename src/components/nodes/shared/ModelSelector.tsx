@@ -16,6 +16,7 @@ import {
   defaultModelGroups,
   getConfiguredModelGroups,
   isProviderCategoryVisible,
+  resolveConfiguredModelCategory,
 } from './defaultModels';
 import { useAppStore } from '../../../store/useAppStore';
 import { useT } from '../../../i18n';
@@ -102,18 +103,19 @@ export default function ModelSelector({
   const generalModelGroup: ModelGroup | null = useMemo(() => {
     if (generalModels.length === 0) return null;
     const models: ModelOption[] = generalModels
-      .filter((gm) => (
-        CATEGORY_TO_NODE_TYPES[gm.category].includes(modelNodeType)
-        && isProviderCategoryVisible(config, gm.providerConfigId, gm.category)
+      .map((gm) => ({ gm, category: resolveConfiguredModelCategory(gm) }))
+      .filter(({ gm, category }) => (
+        CATEGORY_TO_NODE_TYPES[category].includes(modelNodeType)
+        && isProviderCategoryVisible(config, gm.providerConfigId, category)
       ))
-      .map((gm) => ({
+      .map(({ gm, category }) => ({
         value: `general/${gm.id}`,
         provider: 'general',
         label: gm.name,
         description: `ID: ${gm.modelId}`,
         iconType: 'badge' as const,
-        badgeText: GENERAL_MODEL_CATEGORY_LABELS[gm.category].slice(0, 2),
-        nodeTypes: CATEGORY_TO_NODE_TYPES[gm.category],
+        badgeText: GENERAL_MODEL_CATEGORY_LABELS[category].slice(0, 2),
+        nodeTypes: CATEGORY_TO_NODE_TYPES[category],
       }));
     if (models.length === 0) return null;
     return {

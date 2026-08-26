@@ -120,23 +120,43 @@ export function parseMultiPathResponse(
   primaryField: string,
   fallbackFields: string[] = ['images'],
 ): string | undefined {
+  const readUrl = (value: unknown): string | undefined => {
+    if (typeof value === 'string' && value.trim()) return value;
+    if (Array.isArray(value)) {
+      const url = splitCommaSeparatedUrls(value.filter((item): item is string => typeof item === 'string'))[0];
+      if (url) return url;
+    }
+    if (value && typeof value === 'object') {
+      const record = value as Record<string, unknown>;
+      return readUrl(record.url)
+        ?? readUrl(record.video_url)
+        ?? readUrl(record.audio_url)
+        ?? readUrl(record.image_url)
+        ?? readUrl(record.result_url);
+    }
+    return undefined;
+  };
+
   // 优先取值
   const primary = (json as Record<string, unknown[]>)[primaryField];
   if (Array.isArray(primary) && primary.length > 0) {
-    const item = primary[0] as Record<string, unknown>;
-    if (Array.isArray(item.url)) return splitCommaSeparatedUrls(item.url as string[])[0];
-    if (typeof item.url === 'string') return item.url;
+    const url = readUrl(primary[0]);
+    if (url) return url;
   }
   // 兜底
   for (const field of fallbackFields) {
     const arr = (json as Record<string, unknown[]>)[field];
     if (Array.isArray(arr) && arr.length > 0) {
-      const item = arr[0] as Record<string, unknown>;
-      if (Array.isArray(item.url)) return splitCommaSeparatedUrls(item.url as string[])[0];
-      if (typeof item.url === 'string') return item.url;
+      const url = readUrl(arr[0]);
+      if (url) return url;
     }
   }
-  return undefined;
+
+  return readUrl(json)
+    ?? readUrl(json.data)
+    ?? readUrl(json.result)
+    ?? readUrl(json.output)
+    ?? readUrl(json.metadata);
 }
 
 /**

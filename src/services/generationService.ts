@@ -187,13 +187,19 @@ export async function executeGeneration(
         workflowId: data.workflowId, workflowInputs: data.workflowInputs,
       });
       if (!isStillCurrentSubmission()) return { success: false, message: '任务已取消' };
+      store.updateNodeData(nodeId, {
+        videoUrl: result.url, sourceUrl: result.url,
+        thumbnailUrl: result.url, output: result.url, status: 'success',
+      });
       const saved = submittingProjectId
         ? await downloadUrlAndSave(result.url, submittingProjectId, 'ai-video', data.label).catch(() => null)
         : null;
-      store.updateNodeData(nodeId, {
-        videoUrl: saved?.assetUrl || result.url, sourceUrl: result.url, filePath: saved?.filePath,
-        thumbnailUrl: result.url, output: result.url, status: 'success',
-      });
+      if (saved?.assetUrl && isStillCurrentSubmission()) {
+        store.updateNodeDataTransient(nodeId, {
+          videoUrl: saved.assetUrl,
+          filePath: saved.filePath,
+        });
+      }
       store.recordOutputHistory(nodeId, {
         nodeId, nodeLabel: data.label, timestamp: Date.now(), prompt: effectivePrompt,
         output: result.url, nodeType: 'ai-video', model: nodeModel, provider: nodeProvider,

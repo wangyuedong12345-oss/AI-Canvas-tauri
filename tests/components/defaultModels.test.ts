@@ -180,6 +180,38 @@ describe('内置厂商动态模型目录', () => {
       }),
     );
   });
+
+  it('按模型 ID 纠正旧配置里的 Seedance 类别并显示到视频节点', () => {
+    const config: AppConfig = {
+      providers: {
+        volcengine: {
+          name: '火山方舟',
+          apiKey: 'configured',
+          catalogId: 'volcengine',
+          selectedModels: [{
+            id: 'Doubao-Seedance-2.0-mini',
+            name: 'Doubao-Seedance-2.0-mini',
+            category: 'text',
+            provider: 'volcengine',
+          }],
+        },
+      },
+      theme: 'dark',
+    };
+
+    const videoModels = getConfiguredModelGroups(config, 'ai-video')
+      .find((group) => group.id === 'volcengine')?.models ?? [];
+
+    expect(videoModels).toContainEqual(expect.objectContaining({
+      value: 'volcengine/Doubao-Seedance-2.0-mini',
+      label: 'Doubao-Seedance-2.0-mini',
+      nodeTypes: ['ai-video'],
+    }));
+    expect(getConfiguredModelGroups(config, 'ai-text')
+      .find((group) => group.id === 'volcengine')?.models.some((model) =>
+        model.value === 'volcengine/Doubao-Seedance-2.0-mini',
+      )).not.toBe(true);
+  });
 });
 
 describe('自定义连接模型的来源标注', () => {
@@ -208,5 +240,21 @@ describe('自定义连接模型的来源标注', () => {
     const option = getMediaModelOptions([generalModels[0]])
       .find((item) => item.value === 'general/gm-a');
     expect(option?.description).toBe('ID: gpt-4o');
+  });
+
+  it('通用模型里旧类别的 Seedance 也按视频模型展示', () => {
+    const option = getMediaModelOptions([{
+      id: 'gm-seedance',
+      name: 'Doubao-Seedance-2.0-mini',
+      modelId: 'doubao-seedance-2-0-mini-260615',
+      category: 'text',
+      providerConfigId: 'custom-a',
+    }], config).find((item) => item.value === 'general/gm-seedance');
+
+    expect(option).toMatchObject({
+      mediaKind: 'video',
+      nodeTypes: ['ai-video'],
+      badgeText: '视',
+    });
   });
 });

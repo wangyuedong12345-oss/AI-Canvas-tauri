@@ -205,18 +205,22 @@ async function executeOneNode(node: Node<BaseNodeData>, ctx: BatchContext): Prom
         workflowInputs: d.workflowInputs,
         nodeId: node.id,
       });
-      const saved = ctx.currentProjectId
-        ? await downloadUrlAndSave(result.url, ctx.currentProjectId, 'ai-video', d.label).catch(() => null)
-        : null;
-      const mediaUrl = saved?.assetUrl || result.url;
       ctx.updateNodeDataTransient(node.id, {
-        videoUrl: mediaUrl,
+        videoUrl: result.url,
         sourceUrl: result.url,
-        filePath: saved?.filePath,
         thumbnailUrl: result.url,
         output: result.url,
         status: 'success',
       });
+      const saved = ctx.currentProjectId
+        ? await downloadUrlAndSave(result.url, ctx.currentProjectId, 'ai-video', d.label).catch(() => null)
+        : null;
+      if (saved?.assetUrl) {
+        ctx.updateNodeDataTransient(node.id, {
+          videoUrl: saved.assetUrl,
+          filePath: saved.filePath,
+        });
+      }
       ctx.recordOutputHistory(node.id, {
         nodeId: node.id,
         nodeLabel: d.label,

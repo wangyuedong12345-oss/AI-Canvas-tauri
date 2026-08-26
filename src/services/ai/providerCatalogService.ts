@@ -304,7 +304,7 @@ export function getProviderDefinition(
   return PROVIDER_DEFINITION_MAP.get(config?.catalogId || providerId);
 }
 
-function inferModelCategory(modelId: string): GeneralModelCategory {
+export function inferModelCategory(modelId: string): GeneralModelCategory {
   const id = modelId.toLowerCase();
   if (/tts|speech|audio|music|voice|whisper|transcri/.test(id)) return 'audio';
   // minimax-h3 及其 Context-IR / Regeneration 变体均为视频生成模型；

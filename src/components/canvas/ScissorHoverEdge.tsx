@@ -40,17 +40,18 @@ function ScissorHoverEdge({
   labelBgPadding,
   labelBgBorderRadius,
   data,
-}: EdgeProps<ScissorHoverEdgeData>) {
+}: EdgeProps) {
   const [showScissors, setShowScissors] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const onEdgesChange = useAppStore((s) => s.onEdgesChange);
   const flowId = useId().replace(/:/g, '');
+  const edgeData = data as ScissorHoverEdgeData | undefined;
 
   const pathParams = {
     sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition,
   };
 
-  const baseType = data?.baseEdgeType;
+  const baseType = edgeData?.baseEdgeType;
   const [edgePath, labelX, labelY] = baseType === SMOOTHSTEP_TYPE
     ? getSmoothStepPath(pathParams)
     : getBezierPath(pathParams);
@@ -84,7 +85,7 @@ function ScissorHoverEdge({
 
   const half = SCISSOR_WRAPPER / 2;
 
-  const showFlow = data?.selectedNodeFlow === true;
+  const showFlow = edgeData?.selectedNodeFlow === true;
 
   const gradientId = `scissor-edge-flow-gradient-${flowId}`;
   const maskId = `scissor-edge-flow-mask-${flowId}`;

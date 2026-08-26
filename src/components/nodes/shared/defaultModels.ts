@@ -14,6 +14,7 @@ import type {
 } from '../../../types';
 import { CATEGORY_TO_NODE_TYPES } from '../../../types';
 import { DREAMINA_IMAGE_MODELS, DREAMINA_VIDEO_MODELS } from '../../../services/ai/dreaminaModels';
+import { inferModelCategory } from '../../../services/ai/providerCatalogService';
 
 export type MediaModelKind = 'image' | 'video' | 'audio';
 
@@ -1002,6 +1003,26 @@ function providerConfigIdForGroup(groupId: string): string {
   return groupId === 'runninghub' ? 'runninghub-model' : groupId;
 }
 
+type ConfiguredCategoryModel = {
+  id?: string;
+  modelId?: string;
+  name?: string;
+  category: GeneralModelCategory;
+};
+
+export function resolveConfiguredModelCategory(
+  model: ConfiguredCategoryModel,
+): GeneralModelCategory {
+  const identifier = [model.id, model.modelId].filter(Boolean).join(' ');
+  const idCategory = inferModelCategory(identifier);
+  if (idCategory !== 'text') return idCategory;
+
+  const nameCategory = inferModelCategory(model.name ?? '');
+  if (model.category === 'text' && nameCategory !== 'text') return nameCategory;
+
+  return model.category;
+}
+
 function createConfiguredModelOption(
   group: ModelGroup,
   model: ProviderModelSelection,
@@ -1010,6 +1031,7 @@ function createConfiguredModelOption(
   const value = model.id.startsWith(`${provider}/`)
     ? model.id
     : `${provider}/${model.id}`;
+  const category = resolveConfiguredModelCategory(model);
   return {
     value,
     provider,
@@ -1019,7 +1041,7 @@ function createConfiguredModelOption(
     icon: group.icon,
     iconType: group.iconType,
     badgeText: group.badgeText,
-    nodeTypes: CATEGORY_TO_NODE_TYPES[model.category],
+    nodeTypes: CATEGORY_TO_NODE_TYPES[category],
   };
 }
 
@@ -1099,7 +1121,7 @@ export function getConfiguredModelGroups(
       );
       for (const selectedModel of selectedModels) {
         const normalizedId = normalizedCatalogModelId(selectedModel.id, modelProvider);
-        if (selectedModel.category !== category || configuredIds.has(normalizedId)) continue;
+        if (resolveConfiguredModelCategory(selectedModel) !== category || configuredIds.has(normalizedId)) continue;
         models.push(createConfiguredModelOption(group, selectedModel));
         configuredIds.add(normalizedId);
       }
@@ -1148,20 +1170,15 @@ export function getMediaModelOptions(
   });
 
   const custom: MediaModelOption[] = generalModels
-    .filter((model) => (
-      (model.category === 'image'
-        || model.category === 'video'
-        || model.category === 'audio')
-      && (!config || isProviderCategoryVisible(
-        config,
-        model.providerConfigId,
-        model.category,
-      ))
+    .map((model) => ({ model, category: resolveConfiguredModelCategory(model) }))
+    .filter(({ model, category }) => (
+      (category === 'image' || category === 'video' || category === 'audio')
+      && (!config || isProviderCategoryVisible(config, model.providerConfigId, category))
     ))
-    .map((model) => {
-      const mediaKind: MediaModelKind = model.category === 'image'
+    .map(({ model, category }) => {
+      const mediaKind: MediaModelKind = category === 'image'
         ? 'image'
-        : model.category === 'video'
+        : category === 'video'
           ? 'video'
           : 'audio';
       const nodeType = mediaKind === 'image'

@@ -39,7 +39,7 @@ import {
 } from '../aiDimensions';
 import { savePendingTask, updatePendingTask, removePendingTask, registerNodePolling, cleanupNodePolling } from '../pollManager';
 import { corsSafeFetch } from './httpTransport';
-import { resolveImageUrlArray } from './imageUtils';
+import { resolveImageDataUrlArray, resolveImageUrlArray } from './imageUtils';
 import { resolveMediaReferenceUrl } from '../uploadService';
 import { mapVideoParameters } from './videoParameterMappings';
 import {
@@ -136,6 +136,13 @@ async function resolveGeneralProtocolMediaUrls(
     // 通用协议模型需要 data URL（base64）；公网 / data: 原样返回
     return resolveMediaReferenceUrl(url, { mode: 'dataUrl', kind });
   }));
+}
+
+function shouldUseInlineSeedanceImageRefs(modelId: string, providerConfigId: string): boolean {
+  const normalizedModel = modelId.trim().toLowerCase();
+  const normalizedProvider = providerConfigId.trim().toLowerCase();
+  return normalizedModel.includes('seedance')
+    && (normalizedModel.includes('doubao') || normalizedProvider === 'volcengine');
 }
 
 async function resolveVideoReferenceInput(
@@ -238,15 +245,28 @@ export function buildGeneralVideoProtocolVariables(
   // 带角色的参考图数组（[{ url, role }]），供协议模板按 image_with_roles 语义引用：
   // 首/尾帧保留原角色，其余参考图按 Seedance 约定写 reference_image；
   // 为空时置 undefined，让模板省略该字段而不是发出空数组。
-  const roleImages = (referenceInput.references ?? [])
-    .filter((reference) => reference.kind === 'image')
-    .map((reference) => ({
-      url: getMediaReferenceUrl(reference),
+  const imageReferences = (referenceInput.references ?? [])
+    .filter((reference) => reference.kind === 'image');
+  const roleImages = imageReferences
+    .map((reference, index) => ({
+      url: referenceInput.imageUrls[index] ?? getMediaReferenceUrl(reference),
       role: reference.role === 'first_frame' || reference.role === 'last_frame'
         ? reference.role
         : 'reference_image',
     }));
   const imageWithRoles = roleImages.length > 0 ? roleImages : undefined;
+  const seedanceContent = roleImages.length > 0
+    ? [
+      ...(referenceInput.prompt.trim()
+        ? [{ type: 'text', text: referenceInput.prompt.trim() }]
+        : []),
+      ...roleImages.map((image) => ({
+        type: 'image_url',
+        image_url: { url: image.url },
+        role: image.role,
+      })),
+    ]
+    : undefined;
 
   return {
     model: modelId,
@@ -272,6 +292,7 @@ export function buildGeneralVideoProtocolVariables(
     firstImage,
     lastImage,
     imageWithRoles,
+    seedanceContent,
     referenceImageUrls: referenceInput.imageUrls,
     videoUrls: referenceInput.videoUrls,
     referenceVideoUrl: referenceInput.videoUrls[0],
@@ -423,8 +444,10 @@ export async function generateVideo(
     const referenceInput = await resolveVideoReferenceInput(rawPrompt, params.nodeId, params.referenceMedia ?? []);
     assertVideoReferenceLimits(referenceInput, gm.videoCapability, gm.name);
     if (gm.executionProfile) {
-      const [remoteImageUrls, videoUrls, audioUrls] = await Promise.all([
-        resolveImageUrlArray(referenceInput.imageUrls, connection.providerConfigId),
+      const remoteImageUrls = shouldUseInlineSeedanceImageRefs(gm.modelId, connection.providerConfigId)
+        ? await resolveImageDataUrlArray(referenceInput.imageUrls, signal)
+        : await resolveImageUrlArray(referenceInput.imageUrls, connection.providerConfigId);
+      const [videoUrls, audioUrls] = await Promise.all([
         resolveGeneralProtocolMediaUrls(referenceInput.references ?? [], 'video'),
         resolveGeneralProtocolMediaUrls(referenceInput.references ?? [], 'audio'),
       ]);

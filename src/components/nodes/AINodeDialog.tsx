@@ -531,21 +531,24 @@ function AINodeDialog() {
           nodeId: activeNodeId ?? undefined,
         });
         if (!isStillCurrentSubmission()) return;
-        // 下载远程 URL 到本地项目目录
-        const saved = currentProjectId
-          ? await downloadUrlAndSave(result.url, currentProjectId, 'ai-video', nodeLabel).catch(() => null)
-          : null;
-        const mediaUrl = saved?.assetUrl || result.url;
-        updateNodeData(activeNodeId!, {
-          videoUrl: mediaUrl,
+        updateNodeData(submittingNodeId, {
+          videoUrl: result.url,
           sourceUrl: result.url,
-          filePath: saved?.filePath,
           thumbnailUrl: result.url,
           output: result.url,
           status: 'success',
         });
-        recordOutputHistory(activeNodeId!, {
-          nodeId: activeNodeId!,
+        const saved = currentProjectId
+          ? await downloadUrlAndSave(result.url, currentProjectId, 'ai-video', nodeLabel).catch(() => null)
+          : null;
+        if (saved?.assetUrl && isStillCurrentSubmission()) {
+          updateNodeDataTransient(submittingNodeId, {
+            videoUrl: saved.assetUrl,
+            filePath: saved.filePath,
+          });
+        }
+        recordOutputHistory(submittingNodeId, {
+          nodeId: submittingNodeId,
           nodeLabel: nodeLabel,
           timestamp: Date.now(),
           prompt: effectivePrompt,

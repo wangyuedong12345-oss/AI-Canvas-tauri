@@ -231,32 +231,50 @@ async function applyNodeResult(
   const nodeType = data.type;
   const currentProjectId = store.currentProjectId;
 
-  // 下载远程 URL 到本地
-  const saved = currentProjectId
-    ? await downloadUrlAndSave(resultUrl, currentProjectId, nodeType, nodeLabel).catch(() => null)
-    : null;
-  const mediaUrl = saved?.assetUrl || resultUrl;
-
   const updateData: Partial<BaseNodeData> = {
     output: resultUrl,
     sourceUrl: resultUrl,
-    filePath: saved?.filePath,
     thumbnailUrl: resultUrl,
     status: 'success',
   };
+  let historyFilePath: string | undefined;
+  let dramaMediaUrl = resultUrl;
 
   if (nodeType === 'ai-image' || nodeType === 'ai-panorama') {
+    const saved = currentProjectId
+      ? await downloadUrlAndSave(resultUrl, currentProjectId, nodeType, nodeLabel).catch(() => null)
+      : null;
+    const mediaUrl = saved?.assetUrl || resultUrl;
     updateData.imageUrl = mediaUrl;
+    updateData.filePath = saved?.filePath;
+    historyFilePath = saved?.filePath;
+    dramaMediaUrl = mediaUrl;
   } else if (nodeType === 'ai-video') {
-    updateData.videoUrl = mediaUrl;
+    updateData.videoUrl = resultUrl;
   } else if (nodeType === 'ai-audio') {
+    const saved = currentProjectId
+      ? await downloadUrlAndSave(resultUrl, currentProjectId, nodeType, nodeLabel).catch(() => null)
+      : null;
+    const mediaUrl = saved?.assetUrl || resultUrl;
     updateData.audioUrl = mediaUrl;
+    updateData.filePath = saved?.filePath;
+    historyFilePath = saved?.filePath;
   }
 
   store.updateNodeDataTransient(nodeId, updateData);
+  const savedVideo = nodeType === 'ai-video' && currentProjectId
+    ? await downloadUrlAndSave(resultUrl, currentProjectId, nodeType, nodeLabel).catch(() => null)
+    : null;
+  if (savedVideo?.assetUrl) {
+    store.updateNodeDataTransient(nodeId, {
+      videoUrl: savedVideo.assetUrl,
+      filePath: savedVideo.filePath,
+    });
+    historyFilePath = savedVideo.filePath;
+  }
   // 异步轮询完成的生图也要回写短剧资产绑图
   if (nodeType === 'ai-image' || nodeType === 'ai-panorama') {
-    store.syncDramaAssetImageFromNode?.(nodeId, mediaUrl);
+    store.syncDramaAssetImageFromNode?.(nodeId, dramaMediaUrl);
   }
   store.recordOutputHistory(nodeId, {
     nodeId,
@@ -269,7 +287,7 @@ async function applyNodeResult(
     provider: (data.provider as string) || '',
     status: 'success',
     mediaUrl: resultUrl,
-    filePath: saved?.filePath,
+    filePath: historyFilePath,
   });
   store.showToast(`${nodeLabel} 生成已完成`);
 }
