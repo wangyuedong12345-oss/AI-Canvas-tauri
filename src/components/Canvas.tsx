@@ -1,10 +1,11 @@
-﻿/**
- * Canvas 閻㈣绔锋稉鑽ょ矋娴?閳?React Flow 閻㈣绔烽弽绋跨妇閿涘瞼顓搁悶鍡氬Ν閻?鏉堣瑕嗛弻鎾扁偓浣瑰珛閺€淇扁偓浣界箾缁捐￥鈧礁褰搁柨顔垮綅閸楁洏鈧胶鈹栭悩鑸碘偓?
+/**
+ * Canvas 画布主组件 — React Flow 画布核心，管理节点/边渲染、拖放、连线、右键菜单、空状态
  */
 import { lazy, Suspense, useCallback, useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { ReactFlow,
   Background,
+  Controls,
   MiniMap,
   BackgroundVariant,
   ConnectionMode,
@@ -44,7 +45,7 @@ import RoundedMiniMapMask from './canvas/RoundedMiniMapMask';
 import MultiSelectToolbar from './canvas/MultiSelectToolbar';
 import CanvasEmptyState from './canvas/CanvasEmptyState';
 import HistoryTimelinePanel from './canvas/HistoryTimelinePanel';
-import ScissorHoverEdge from './canvas/ScissorHoverEdge';
+import SelectedNodeFlowEdge from './canvas/SelectedNodeFlowEdge';
 import CanvasRadialMenu, { CanvasLongPressIndicator } from './canvas/CanvasRadialMenu';
 import { useConnectionDropMenu } from '../hooks/useConnectionDropMenu';
 import { useCanvasContextMenu } from '../hooks/useCanvasContextMenu';
@@ -53,6 +54,17 @@ import { useCanvasSecondaryClickMenu } from '../hooks/useCanvasSecondaryClickMen
 import { useCanvasLongPressRadialMenu } from '../hooks/useCanvasLongPressRadialMenu';
 import { useAppStore } from '../store/useAppStore';
 import { filterHiddenCanvasElements, isCanvasConnectionValid } from '../store/store.nodes';
+import {
+  createCanvasEdgeProjection,
+  createCanvasNodeProjectionCache,
+  getCanvasNodeById,
+  hydrateCanvasNodeChanges,
+  hydrateCanvasNodeData,
+  projectCanvasNodesForReactFlow,
+  projectSelectedCanvasEdges,
+  projectTransientCanvasNode,
+  syncCanvasNodeIndex,
+} from '../utils/canvasRenderProjection';
 import { useNodeCreation } from '../hooks/useNodeCreation';
 import { useCanvasDrawing } from '../hooks/useCanvasDrawing';
 import type { BaseNodeData } from '../types';
@@ -67,13 +79,13 @@ import {
   type CanvasPanByDetail,
 } from '../services/canvasViewportService';
 
-// 閹虫帒濮炴潪鏂ょ窗閸忋劍娅欓懞鍌滃仯瀵洖鍙?three閿涘牅缍嬬粔顖氥亣閹村嚖绱氶敍宀€鏁剧敮鍐х瑐閸戣櫣骞囬崗銊︽珯閼哄倻鍋ｉ弮鑸靛閸旂姾娴?
+// 懒加载：全景节点引入 three（体积大户），画布上出现全景节点时才加载
 const PanoramaNodeLazy = lazy(() => import('./nodes/PanoramaNode'));
 function PanoramaNode(props: { id: string; data: BaseNodeData; selected?: boolean }) {
   return <Suspense fallback={null}><PanoramaNodeLazy {...props} /></Suspense>;
 }
 
-// 閹虫帒濮炴潪鏂ょ窗3D 鐎靛吋绱ㄩ崣鎷屽Ν閻愯瀵滈棁鈧潻鐐村复閺堫剙婀?Tauri 閻欘剛鐝涚粣妤€褰?
+// 懒加载：3D 导演台节点按需连接本地 Tauri 独立窗口
 const DirectorDeskNodeLazy = lazy(() => import('./nodes/DirectorDeskNode'));
 function DirectorDeskNode(props: { id: string; data: BaseNodeData; selected?: boolean }) {
   return <Suspense fallback={null}><DirectorDeskNodeLazy {...props} /></Suspense>;
@@ -81,19 +93,23 @@ function DirectorDeskNode(props: { id: string; data: BaseNodeData; selected?: bo
 
 const CharacterAssetDialog = lazy(() => import('./CharacterAssetDialog'));
 
-// 閳光偓閳光偓 Node types mapping 閳光偓閳光偓
+// ── Node types mapping ──
 /**
- * 缂佹瑦鐦℃稉顏囧Ν閻愬湱绮嶆禒璺哄瘶娑撯偓鐏炲倿鏁婄拠顖濈珶閻ｅ矉绱伴崡鏇氶嚋閼哄倻鍋ｅ〒鍙夌厠閹舵盯鏁婇敍鍫ｅ壈閺佺増宓侀妴浣割嚤閸忋儲鏋冩禒韬测偓浣规＋閻楀牐绺肩粔缁樼暙閻ｆ瑱绱?
- * 閸欘亪妾风痪褎鍨氭稉鈧鐘插窗娴ｅ秴宕遍敍宀€鏁剧敮鍐ㄥ従娴ｆ瑩鍎撮崚鍡欐埛缂侇厼褰查悽銊ｂ偓?
- * 閸欘亜婀Ο鈥虫健妞よ泛鐪扮拫鍐暏娑撯偓濞?閳ユ柡鈧?React Flow 鐟曚焦鐪?nodeTypes 娑撳骸鍙炬稉顓犳畱缂佸嫪娆㈤煬顐″敜娣囨繃瀵旂粙鍐茬暰閵?
+ * 给每个节点组件包一层错误边界：单个节点渲染抛错（脏数据、导入文件、旧版迁移残留）
+ * 只降级成一张占位卡，画布其余部分继续可用。
+ * 只在模块顶层调用一次 —— React Flow 要求 nodeTypes 与其中的组件身份保持稳定。
  */
 function withNodeRenderBoundaries(types: NodeTypes): NodeTypes {
   return Object.fromEntries(Object.entries(types).map(([typeName, NodeComponent]) => {
-    const Bounded = (props: NodeProps) => (
-      <NodeRenderBoundary nodeId={props.id} typeName={typeName} data={props.data}>
-        <NodeComponent {...props} />
-      </NodeRenderBoundary>
-    );
+    const Bounded = (props: NodeProps) => {
+      const liveData = useAppStore((state) => getCanvasNodeById(state.nodes, props.id)?.data);
+      const data = liveData ?? props.data;
+      return (
+        <NodeRenderBoundary nodeId={props.id} typeName={typeName} data={data}>
+          <NodeComponent {...props} data={data} />
+        </NodeRenderBoundary>
+      );
+    };
     Bounded.displayName = `NodeBoundary(${typeName})`;
     return [typeName, Bounded] as const;
   }));
@@ -121,27 +137,28 @@ const nodeTypes: NodeTypes = withNodeRenderBoundaries({
 });
 
 const edgeTypes: EdgeTypes = {
-    'scissor-hover': ScissorHoverEdge,
+  'selected-node-flow': SelectedNodeFlowEdge,
 };
 
-// 閳光偓閳光偓 Stable ReactFlow props (hoisted to avoid new identities every render,
-//    which makes React Flow re-run internal effects and drop frames on drag) 閳光偓閳光偓
+// ── Stable ReactFlow props (hoisted to avoid new identities every render,
+//    which makes React Flow re-run internal effects and drop frames on drag) ──
 const FIT_VIEW_OPTIONS = { padding: 0.2, maxZoom: 1 };
 const PRO_OPTIONS = { hideAttribution: true };
 const PAN_ON_DRAG_DEFAULT = [1, 2]; // 默认交互：右键(2) + 中键(1) 拖拽平移
 const PAN_ON_DRAG_CLASSIC = [0];    // 传统交互：左键(0) 拖拽平移
-const DEFAULT_EDGE_STYLE: { stroke: string; strokeWidth: number } = { stroke: 'var(--canvas-edge)', strokeWidth: 1.5 };
+const DEFAULT_EDGE_STYLE = { stroke: 'var(--canvas-edge)', strokeWidth: 1.5 };
 const isTauri = typeof window !== 'undefined' && '__TAURI__' in window;
 const isMacOS = typeof navigator !== 'undefined'
   && /Macintosh|Mac OS X/.test(navigator.userAgent);
 const shouldUseMacTrackpadPan = isTauri && isMacOS;
 const easeOutCubic = (progress: number) => 1 - (1 - progress) ** 3;
 const CANVAS_INTERACTING_CLASS = 'canvas-interacting';
+type CanvasInteractionKind = 'node' | 'viewport';
 const NODE_TOOLBAR_MIN_SCREEN_SCALE = 0.8;
 const NODE_TOOLBAR_MAX_SCREEN_SCALE = 1.25;
 const NODE_TOOLBAR_SCALE_EPSILON = 0.0005;
 
-// 閳光偓閳光偓 娴溿倓绨板Ο鈥崇础妫板嫯顔曢敍鍫濆枙缂佹挸顕挒鈽呯礉闁灝鍘ゅВ蹇旑偧 render 娴溠呮晸閺傛媽闊╂禒鏂ょ礉鐎佃壈鍤?React Flow 閸愬懘鍎?effect 闁插秷绐囬妴浣瑰珛閹疯姤甯€鐢嶇礆閳光偓閳光偓
+// ── 交互模式预设（冻结对象，避免每次 render 产生新身份，导致 React Flow 内部 effect 重跑、拖拽掉帧）──
 const DEFAULT_INTERACTION = Object.freeze({
   panOnScroll: shouldUseMacTrackpadPan,
   zoomOnScroll: !shouldUseMacTrackpadPan,
@@ -155,15 +172,15 @@ const DEFAULT_INTERACTION = Object.freeze({
 
 const CLASSIC_INTERACTION = Object.freeze({
   panOnScroll: true,
-  panOnScrollMode: PanOnScrollMode.Free, // Free 閹靛秷鍏橀崗濂搞€?Shift+濠婃俺鐤嗗鏉戦挬楠炲磭些娑撳孩娅橀柅姘泊鏉烆喖鐎惄鏉戦挬缁?
+  panOnScrollMode: PanOnScrollMode.Free, // Free 才能兼顾 Shift+滚轮水平平移与普通滚轮垂直平移
   panOnScrollSpeed: 0.5,
   zoomOnScroll: false,
   zoomOnPinch: true,
-  zoomOnDoubleClick: false, // 閸忔娊妫撮崣灞藉毊缂傗晜鏂侀敍宀勪缉閸忓秳绗岄妴灞藉蓟閸戣崵鈹栭惂钘夊灡瀵ょ儤鏋冮張顒冨Ν閻愬箍鈧秴鍟跨粣?
-  zoomActivationKeyCode: 'Control', // Ctrl+濠婃俺鐤嗙紓鈺傛杹
+  zoomOnDoubleClick: false, // 关闭双击缩放，避免与「双击空白创建文本节点」冲突
+  zoomActivationKeyCode: 'Control', // Ctrl+滚轮缩放
   panOnDrag: PAN_ON_DRAG_CLASSIC,
   selectionOnDrag: false,
-  selectionKeyCode: 'Shift', // Shift+瀹革箓鏁幏鏍ㄥ 閳?濡楀棝鈧?
+  selectionKeyCode: 'Shift', // Shift+左键拖拽 → 框选
   multiSelectionKeyCode: 'Shift',
   selectionMode: SelectionMode.Partial,
   deleteKeyCode: null,
@@ -198,7 +215,7 @@ const minimapNodeColor = (node: RFNode) => {
   }
 };
 
-// 閳光偓閳光偓 Snap lines overlay 閳光偓閳光偓
+// ── Snap lines overlay ──
 type SpacingSnapLine = Extract<SnapLine, { kind: 'spacing' }>;
 
 function formatSpacingDistance(distance: number): string {
@@ -378,17 +395,29 @@ function CanvasInner() {
   const commitToHistory = useAppStore((s) => s.commitToHistory);
   const minimapVisible = useAppStore((s) => s.minimapVisible);
   const closeNodeDialog = useAppStore((s) => s.closeNodeDialog);
+  const setSettingsOpen = useAppStore((s) => s.setSettingsOpen);
+  const setSettingsInitialTab = useAppStore((s) => s.setSettingsInitialTab);
   const interactionMode = useAppStore((s) => s.config.interactionMode ?? 'default');
-  const canvasBackground = useAppStore((s) => s.config.canvasBackground);
   const canvasNoteToolbarVisible = useAppStore((s) => s.config.canvasNoteToolbarVisible !== false);
+  const [nodeProjectionCache] = useState(createCanvasNodeProjectionCache);
   const interaction = interactionMode === 'classic' ? CLASSIC_INTERACTION : DEFAULT_INTERACTION;
-  // 閸欐娊鏁?effect 閻?ref 鐠囪褰囧Ο鈥崇础閿涘矂浼╅崗宥嗗Ω interactionMode 閸旂姾绻?effect 娓氭繆绂嗛懓灞筋嚤閼峰娲冮崥顒€娅掗柌宥嗗瘯
+  // 右键 effect 用 ref 读取模式，避免把 interactionMode 加进 effect 依赖而导致监听器重挂
   const interactionModeRef = useRef(interactionMode);
   useEffect(() => {
     interactionModeRef.current = interactionMode;
   }, [interactionMode]);
+  useEffect(() => {
+    syncCanvasNodeIndex(nodes);
+  }, [nodes]);
   const reactFlowInstance = useReactFlow();
   const updateNodeInternals = useUpdateNodeInternals();
+  const openShortcutsSettings = useCallback(() => {
+    setSettingsInitialTab('shortcuts');
+    setSettingsOpen(true);
+  }, [setSettingsInitialTab, setSettingsOpen]);
+  const fitCanvasView = useCallback(() => {
+    void reactFlowInstance.fitView(FIT_VIEW_OPTIONS);
+  }, [reactFlowInstance]);
   const activeCanvasPanRef = useRef<{
     startX: number;
     startY: number;
@@ -429,7 +458,11 @@ function CanvasInner() {
     },
   }), [reactFlowInstance]);
   const canvasRootRef = useRef<HTMLDivElement>(null);
-  const activeInteractionsRef = useRef(new Set<'node' | 'viewport'>());
+  const activeInteractionsRef = useRef(new Set<CanvasInteractionKind>());
+  const interactionReleaseFramesRef = useRef<Record<CanvasInteractionKind, number>>({
+    node: 0,
+    viewport: 0,
+  });
 
   const nodeToolbarScaleRef = useRef(Number.NaN);
 
@@ -453,7 +486,7 @@ function CanvasInner() {
     updateNodeToolbarScale(reactFlowInstance.getViewport().zoom);
   }, [reactFlowInstance, updateNodeToolbarScale]);
 
-  const setCanvasInteraction = useCallback((kind: 'node' | 'viewport', active: boolean) => {
+  const setCanvasInteraction = useCallback((kind: CanvasInteractionKind, active: boolean) => {
     if (active) activeInteractionsRef.current.add(kind);
     else activeInteractionsRef.current.delete(kind);
     document.documentElement.classList.toggle(
@@ -462,17 +495,60 @@ function CanvasInner() {
     );
   }, []);
 
+  const beginCanvasInteraction = useCallback((kind: CanvasInteractionKind) => {
+    const pendingFrame = interactionReleaseFramesRef.current[kind];
+    if (pendingFrame) cancelAnimationFrame(pendingFrame);
+    interactionReleaseFramesRef.current[kind] = 0;
+    setCanvasInteraction(kind, true);
+  }, [setCanvasInteraction]);
+
+  const endCanvasInteraction = useCallback((kind: CanvasInteractionKind) => {
+    const state = useAppStore.getState();
+    if (!state.activeNodeId || document.querySelector('.ai-dialog-float.is-expanded')) {
+      setCanvasInteraction(kind, false);
+      return;
+    }
+
+    const pendingFrame = interactionReleaseFramesRef.current[kind];
+    if (pendingFrame) cancelAnimationFrame(pendingFrame);
+    interactionReleaseFramesRef.current[kind] = requestAnimationFrame(() => {
+      const latestState = useAppStore.getState();
+      const activeNodeId = latestState.activeNodeId;
+      if (activeNodeId) {
+        const nodeElement = document.querySelector<HTMLElement>(
+          `.react-flow__node[data-id="${activeNodeId}"]`,
+        );
+        const nodeRect = nodeElement?.getBoundingClientRect();
+        if (nodeRect) {
+          latestState.openNodeDialog(activeNodeId, {
+            x: nodeRect.left + nodeRect.width / 2,
+            y: nodeRect.bottom,
+          });
+        }
+      }
+
+      interactionReleaseFramesRef.current[kind] = requestAnimationFrame(() => {
+        interactionReleaseFramesRef.current[kind] = 0;
+        setCanvasInteraction(kind, false);
+      });
+    });
+  }, [setCanvasInteraction]);
+
   useEffect(() => () => {
+    Object.values(interactionReleaseFramesRef.current).forEach((frameId) => {
+      if (frameId) cancelAnimationFrame(frameId);
+    });
+    activeInteractionsRef.current.clear();
     document.documentElement.classList.remove(CANVAS_INTERACTING_CLASS);
   }, []);
 
   const handleCanvasViewportMoveStart = useCallback<OnMove>(() => {
-    setCanvasInteraction('viewport', true);
-  }, [setCanvasInteraction]);
+    beginCanvasInteraction('viewport');
+  }, [beginCanvasInteraction]);
 
   const handleCanvasViewportMoveEnd = useCallback<OnMove>(() => {
-    setCanvasInteraction('viewport', false);
-  }, [setCanvasInteraction]);
+    endCanvasInteraction('viewport');
+  }, [endCanvasInteraction]);
 
   const handleCanvasViewportMove = useCallback<OnMove>((_, viewport) => {
     updateNodeToolbarScale(viewport.zoom);
@@ -484,8 +560,8 @@ function CanvasInner() {
     });
   }, [updateNodeToolbarScale]);
 
-  // 閼哄倻鍋ｆ潻娑樻簚閸斻劎鏁鹃敍鍧眗anslateY閿涘绱扮拋?React Flow 閸︺劍瀵曟潪鐣岀仜闂傚瓨绁村妤€浜哥粔鑽ゆ畱 handle 闁挎氨鍋ｉ獮鍓佺处鐎涙﹫绱?
-  // 鐎佃壈鍤ф潻鐐靛殠鐠ч攱顒涢悙褰掓晩娴ｅ秲鈧倽绻橀崷鍝勫З閻㈣崵绮ㄩ弶鐕傜礄閽€鎴掔秴 translateY:0閿涘鎮楅柌宥嗘煀濞村鍣虹拠銉ㄥΝ閻愬湱娈?handle閵?
+  // 节点进场动画（translateY）会让 React Flow 在挂载瞬间测得偏移的 handle 锚点并缓存，
+  // 导致连线起止点错位。进场动画结束（落位 translateY:0）后重新测量该节点的 handle。
   useEffect(() => {
     const onAnimEnd = (e: AnimationEvent) => {
       if (e.animationName !== 'nodeIn') return;
@@ -543,12 +619,12 @@ function CanvasInner() {
       panOnDrag: false,
       selectionOnDrag: false,
     } : {}),
-    // React Flow 娴兼艾鎷烽悾銉ュ綁閸?undefined 閻ㄥ嫬褰堥幒褍鐫橀幀褝绱濋崶鐘愁劃缂佹挻娼紒妯烘禈閺冭泛绻€妞ょ粯妯夊蹇斾划婢跺秲鈧?
+    // React Flow 会忽略变回 undefined 的受控属性，因此结束绘图时必须显式恢复。
     nodesDraggable: !drawingActive,
     elementsSelectable: !drawingActive,
   }), [drawingActive, interaction]);
 
-  // 閳光偓閳光偓 UI toggles (persisted to localStorage) 閳光偓閳光偓
+  // ── UI toggles (persisted to localStorage) ──
   const [showGrid, setShowGrid] = useState(() => localStorage.getItem('canvas-showGrid') !== 'false');
   const [smoothLine, setSmoothLine] = useState(() => localStorage.getItem('canvas-smoothLine') !== 'false');
 
@@ -584,14 +660,8 @@ function CanvasInner() {
   }, [closeNodeDialog]);
 
   const toggleGrid = useCallback(() => setShowGrid((v) => !v), []);
-  const fitView = useCallback(() => {
-    reactFlowInstance.fitView({ padding: 0.2, maxZoom: 1 });
-  }, [reactFlowInstance]);
-  const openShortcuts = useCallback(() => {
-    useAppStore.getState().setSettingsOpen(true, 'shortcuts');
-  }, []);
 
-  // 閳光偓閳光偓 Connection drop menu 閳光偓閳光偓
+  // ── Connection drop menu ──
   const {
     menu: connectionMenu,
     menuRef: connectionMenuRef,
@@ -601,7 +671,7 @@ function CanvasInner() {
     sourceNode,
   } = useConnectionDropMenu(smoothLine);
 
-  // 閳光偓閳光偓 Node context menu 閳光偓閳光偓
+  // ── Node context menu ──
   const {
     menu: nodeCtxMenu,
     menuRef: nodeCtxMenuRef,
@@ -645,7 +715,7 @@ function CanvasInner() {
     ? nodes.find((n) => n.id === nodeCtxMenu.nodeId && n.type === 'group') != null
     : false;
 
-  // 閳光偓閳光偓 Canvas context menu 閳光偓閳光偓
+  // ── Canvas context menu ──
   const {
     menu: ctxMenu,
     menuRef: ctxMenuRef,
@@ -673,7 +743,7 @@ function CanvasInner() {
     openCanvasMenu: openCtxMenu,
   });
 
-  // 閳光偓閳光偓 External clipboard paste (native paste event 閳?DataTransfer) 閳光偓閳光偓
+  // ── External clipboard paste (native paste event → DataTransfer) ──
   useEffect(() => {
     const handler = (e: ClipboardEvent) => {
       // Skip if user is editing an input
@@ -693,7 +763,7 @@ function CanvasInner() {
     return () => window.removeEventListener('paste', handler, true);
   }, [reactFlowInstance]);
 
-  // 閳光偓閳光偓 Fit view event (project switch / F key) 閳光偓閳光偓
+  // ── Fit view event (project switch / F key) ──
   useEffect(() => {
     const handler = () => {
       // Wait one frame for React to finish rendering new nodes/edges
@@ -705,7 +775,7 @@ function CanvasInner() {
     return () => window.removeEventListener('canvas-fit-view', handler);
   }, [reactFlowInstance]);
 
-  // 閳光偓閳光偓 Keep anchored overlays visible by panning the whole canvas 閳光偓閳光偓
+  // ── Keep anchored overlays visible by panning the whole canvas ──
   useEffect(() => {
     const handler = (event: Event) => {
       const detail = (event as CustomEvent<CanvasPanByDetail>).detail;
@@ -754,7 +824,7 @@ function CanvasInner() {
     };
   }, [reactFlowInstance]);
 
-  // 閳光偓閳光偓 Focus node events (history / Agent-created node batch) 閳光偓閳光偓
+  // ── Focus node events (history / Agent-created node batch) ──
   useEffect(() => {
     const scheduledFrames = new Set<number>();
     const focusNodes = (
@@ -804,7 +874,7 @@ function CanvasInner() {
     };
   }, [reactFlowInstance]);
 
-  // 閳光偓閳光偓 Node click 閳?AI dialog 閳光偓閳光偓
+  // ── Node click → AI dialog ──
   const openNodeDialog = useAppStore((s) => s.openNodeDialog);
   const inlineEditClickTimerRef = useRef<number | null>(null);
   const openDialogForNode = useCallback(
@@ -828,6 +898,7 @@ function CanvasInner() {
 
   const onNodeClick = useCallback(
     (e: React.MouseEvent, node: RFNode<BaseNodeData>) => {
+      const liveNode = hydrateCanvasNodeData(node, useAppStore.getState().nodes);
       if (inlineEditClickTimerRef.current !== null) {
         window.clearTimeout(inlineEditClickTimerRef.current);
         inlineEditClickTimerRef.current = null;
@@ -836,54 +907,54 @@ function CanvasInner() {
       if (e.shiftKey) return;
       const target = e.target instanceof Element ? e.target : null;
       const isEmptyTextEditTrigger = target?.closest('[data-inline-edit-trigger]')
-        && node.data?.type === 'ai-text'
-        && node.data?.role !== 'source';
+        && liveNode.data?.type === 'ai-text'
+        && liveNode.data?.role !== 'source';
       if (isEmptyTextEditTrigger) {
-        // 缁楊兛绔村▎锛勫仯閸戣鍘涚拋?React Flow 鐎瑰本鍨氶柅澶夎厬閿涙稓顑囨禍灞绢偧閻愮懓鍤导姘絿濞戝牆鑴婄粣妤€鑻熸禍銈囩舶 TextNode 閻ㄥ嫬寮婚崙鑽ょ椽鏉堟垯鈧?
+        // 第一次点击先让 React Flow 完成选中；第二次点击会取消弹窗并交给 TextNode 的双击编辑。
         if (e.detail > 1) return;
         inlineEditClickTimerRef.current = window.setTimeout(() => {
           inlineEditClickTimerRef.current = null;
-          const latestNode = useAppStore.getState().nodes.find((item) => item.id === node.id);
+          const latestNode = getCanvasNodeById(useAppStore.getState().nodes, liveNode.id);
           if (!latestNode?.selected || latestNode.data.output) return;
           openDialogForNode(latestNode);
         }, INLINE_EDIT_DOUBLE_CLICK_DELAY_MS);
         return;
       }
       // Non-generative canvas elements have no AI dialog.
-      if (node.type === 'group') return;
-      if (node.type === 'canvas-note') return;
-      if (node.data?.type === 'ai-markdown') return;
-      if (node.data?.role === 'source') return;
-      if (node.data?.type === 'ai-text' && node.data?.output) return;
-      if (node.data?.type === 'ai-image' && node.data?.imageUrl) return;
-      if (node.data?.type === 'ai-animation' && node.data?.imageUrl) return;
-      if (node.data?.type === 'ai-panorama' && node.data?.imageUrl) return;
-      if (node.data?.type === 'ai-video' && node.data?.videoUrl) return;
+      if (liveNode.type === 'group') return;
+      if (liveNode.type === 'canvas-note') return;
+      if (liveNode.data?.type === 'ai-markdown') return;
+      if (liveNode.data?.role === 'source') return;
+      if (liveNode.data?.type === 'ai-text' && liveNode.data?.output) return;
+      if (liveNode.data?.type === 'ai-image' && liveNode.data?.imageUrl) return;
+      if (liveNode.data?.type === 'ai-animation' && liveNode.data?.imageUrl) return;
+      if (liveNode.data?.type === 'ai-panorama' && liveNode.data?.imageUrl) return;
+      if (liveNode.data?.type === 'ai-video' && liveNode.data?.videoUrl) return;
 
-      openDialogForNode(node);
+      openDialogForNode(liveNode);
     },
     [openDialogForNode],
   );
 
-  // 閳光偓閳光偓 Selection sync 閳光偓閳光偓
+  // ── Selection sync ──
   const onSelectionChange = useCallback(
     (changes: OnSelectionChangeParams) => {
       const sel = changes.nodes;
       const nonGroup = sel.filter((n) => n.type !== 'group');
-      // 濡楀棝鈧鎷烽悾銉ュ瀻缂佸嫯濡悙鐧哥窗娑撳骸鍙剧€瑰啳濡悙閫涚閸氬矁顫﹂柅澶夎厬閺冭绱漵tore 闁灏崜鏃堟珟閸掑棛绮嶉敍鍫濆灩闂?閸掑棛绮嶆稉宥嗗皾閸欏﹤顔愰崳顭掔礆閿?
-      // 閸楁洜瀚悙鐟板毊閸掑棛绮嶆禒宥勭箽閻ｆ瑱绱欐笟澶哥艾閸掔娀娅?鐟欙絾鏆庨敍澶堚偓淇丗 鐟欏棜顫庨崢濠氣偓澶婃躬 onSelectionEnd 婢跺嫮鎮婇妴?
+      // 框选忽略分组节点：与其它节点一同被选中时，store 选区剔除分组（删除/分组不波及容器）；
+      // 单独点击分组仍保留（便于删除/解散）。RF 视觉去选在 onSelectionEnd 处理。
       const next = nonGroup.length > 0 ? nonGroup : sel;
       setSelectedNodeIds(next.map((n) => n.id));
     },
     [setSelectedNodeIds],
   );
 
-  // 濡楀棝鈧绮ㄩ弶鐔锋倵閿涙俺瀚㈤崚鍡欑矋閼哄倻鍋ｆ稉搴″従鐎瑰啳濡悙閫涚閸氬矁顫﹀鍡曡厬閿涘苯褰囧☉鍫濆瀻缂佸嫯濡悙鍦畱闁鑵戦敍宀勪缉閸忓秹娈㈤崥搴ゎ潶娑撯偓鐠ч攱瀚嬮崝?
+  // 框选结束后：若分组节点与其它节点一同被框中，取消分组节点的选中，避免随后被一起拖动
   const onSelectionEnd = useCallback(() => {
     clearGroupedSelection();
   }, [clearGroupedSelection]);
 
-  // 閳光偓閳光偓 Node snap 閳光偓閳光偓
+  // ── Node snap ──
   const {
     snapLines,
     onNodeDragStart,
@@ -894,26 +965,27 @@ function CanvasInner() {
     onResizeStop,
   } = useNodeSnap();
 
-  // 缂傗晜鏂侀崥鎼佹濡椼儲甯撮敍姘鼻旂€规艾绱╅悽銊┾偓蹇庣炊缂佹瑨濡悙鐟板敶閻?ResizeHandle閿涘牏绮?Context閿?
+  // 缩放吸附桥接：稳定引用透传给节点内的 ResizeHandle（经 Context）
   const resizeSnapApi = useMemo(
     () => ({ onResizeStart, applyResizeSnap, onResizeStop }),
     [onResizeStart, applyResizeSnap, onResizeStop],
   );
 
-  // 閹稿缍?Ctrl/閳?瀵偓婵瀚嬮幏?閳?閸︺劌甯担宥咁槻閸掓湹绔存稉顏囧Ν閻愮櫢绱欓幏鏍уЗ閻ㄥ嫪绮涢弰顖氬斧閼哄倻鍋ｉ敍宀€鐡戞禍?閹锋牕鍤稉鈧稉顏勫閺?閿?
+  // 按住 Ctrl/⌘ 开始拖拽 → 在原位复制一个节点（拖动的仍是原节点，等于"拖出一个副本"）
   const handleNodeDragStart = useCallback(
     (evt: React.MouseEvent, node: RFNode<BaseNodeData>) => {
-      setCanvasInteraction('node', true);
-      if (node.type === 'canvas-note') commitToHistory();
-      if ((evt.ctrlKey || evt.metaKey) && node.type !== 'group') {
-        duplicateNode(node.id);
+      const liveNode = hydrateCanvasNodeData(node, useAppStore.getState().nodes);
+      beginCanvasInteraction('node');
+      if (liveNode.type === 'canvas-note') commitToHistory();
+      if ((evt.ctrlKey || evt.metaKey) && liveNode.type !== 'group') {
+        duplicateNode(liveNode.id);
       }
-      onNodeDragStart(evt, node);
+      onNodeDragStart(evt, liveNode);
     },
-    [commitToHistory, duplicateNode, onNodeDragStart, setCanvasInteraction],
+    [beginCanvasInteraction, commitToHistory, duplicateNode, onNodeDragStart],
   );
 
-  // 娴犲懎婀痪鍨€烽崚鍥ㄥ床閺冨爼鍣稿鐚寸礉闁灝鍘ゅВ蹇撴姎閺傛澘顕挒陇袝閸?React Flow 閸愬懘鍎撮弴瀛樻煀
+  // 仅在线型切换时重建，避免每帧新对象触发 React Flow 内部更新
   const defaultEdgeOptions = useMemo(
     () => ({
       type: smoothLine ? 'smoothstep' : 'default',
@@ -928,56 +1000,41 @@ function CanvasInner() {
     [edges, nodes],
   );
   const renderedCanvasNodes = useMemo(() => {
-    const graphNodes = draftNode ? [...renderableGraph.nodes, draftNode] : renderableGraph.nodes;
-    return graphNodes.map((node) => node.type === 'canvas-note'
-      ? {
-          ...node,
-          style: {
-            ...node.style,
-            // 缁楁棁顔囬惃鍕偓蹇旀婢舵牗甯撮惌鈺佽埌娑撳秷鍏橀柆顔藉皡娑撳鏌熼懞鍌滃仯閿涙稑褰茬憴浣稿敶鐎圭懓婀?canvas-drawing.css 娑擃厽浠径宥呮嚒娑擃厹鈧?
-            pointerEvents: 'none' as const,
-          },
-        }
-      : node);
-  }, [draftNode, renderableGraph.nodes]);
+    const projected = projectCanvasNodesForReactFlow(
+      renderableGraph.nodes,
+      nodeProjectionCache,
+    );
+    return draftNode ? [...projected, projectTransientCanvasNode(draftNode)] : projected;
+  }, [draftNode, nodeProjectionCache, renderableGraph.nodes]);
 
-  // 娴犲懏娣抽悽鐔歌閺屾挾濮搁幀渚婄礉娑撳秵濡搁梾鎰閸滃矁濡悙褰掆偓澶夎厬閺佸牊鐏夐崘娆忔礀閸欘垱瀵旀稊鍛閻ㄥ嫯绔熼弫鐗堝祦閵?
+  // 仅派生渲染状态，不把隐藏和节点选中效果写回可持久化的边数据。
+  const edgeProjection = useMemo(
+    () => createCanvasEdgeProjection(renderableGraph.edges),
+    [renderableGraph.edges],
+  );
   const renderedEdges = useMemo(() => {
-    const selectedIds = selectedNodeIds.length > 0 ? new Set(selectedNodeIds) : null;
-    return renderableGraph.edges.map((edge) => {
-      const baseEdgeType = edge.type === 'smoothstep' || (!edge.type && smoothLine)
-        ? 'smoothstep'
-        : 'default';
-      return {
-        ...edge,
-        type: 'scissor-hover',
-        style: edge.style ?? DEFAULT_EDGE_STYLE,
-        data: {
-          ...edge.data,
-          baseEdgeType,
-          selectedNodeFlow: selectedIds !== null && (selectedIds.has(edge.source) || selectedIds.has(edge.target)),
-        },
-      };
-    });
-  }, [renderableGraph.edges, selectedNodeIds, smoothLine]);
+    return projectSelectedCanvasEdges(edgeProjection, selectedNodeIds, smoothLine);
+  }, [edgeProjection, selectedNodeIds, smoothLine]);
 
-  // 閳光偓閳光偓 Node change handler 閳光偓閳光偓
+  // ── Node change handler ──
   const handleNodesChange = useCallback(
     (changes: NodeChange<RFNode<BaseNodeData>>[]) => {
+      const currentNodes = useAppStore.getState().nodes;
+      const hydratedChanges = hydrateCanvasNodeChanges(changes, currentNodes);
       const lockedNodeIds = new Set(
-        useAppStore.getState().nodes
+        currentNodes
           .filter((node) => node.draggable === false)
           .map((node) => node.id),
       );
-      const unlockedChanges = changes.filter(
+      const unlockedChanges = hydratedChanges.filter(
         (change) => change.type !== 'position' || !lockedNodeIds.has(change.id),
       );
       if (unlockedChanges.length === 0) return;
 
-      // 閹跺﹤鎯涢梽鍕倵閻ㄥ嫪缍呯純顔炬纯閹恒儲鏁為崗?React Flow 閻ㄥ嫬褰夐弴瀵割吀缁?
-      // 閿涘牊鍨氭稉鍝勬暜娑撯偓閻喓娴夊┃鎰剁礉闁灝鍘ゆ禍灞绢偧 setNodes 鐟曞棛娲婄€佃壈鍤ч惃鍕磽缁?濮楋紕姣婄粵瀣剁礆閵?
-      // 濞夈劍鍓伴敍姘緱閹靛鍋呮稉鈧敮?dragging=false 娑旂喕顩﹂崥鎼佹閿涘苯鎯侀崚娆庣窗瀵懓娲栭崢鐔奉潗閽€鐣屽仯閿涘牅缍呯粔浼欑礆閵?
-      // applySnap 閸︺劑娼幏鏍ㄥ閺堢噦绱檇ragCtx 娑撹櫣鈹栭敍澶嬫Ц閺冪姴澹囨担婊呮暏閻╂挳鈧熬绱濋弫鍛￥闂団偓閸掋倖鏌?dragging閵?
+      // 把吸附后的位置直接注入 React Flow 的变更管线
+      // （成为唯一真相源，避免二次 setNodes 覆盖导致的漂移/橡皮筋）。
+      // 注意：松手那一帧 dragging=false 也要吸附，否则会弹回原始落点（位移）。
+      // applySnap 在非拖拽期（dragCtx 为空）是无副作用直通，故无需判断 dragging。
       const draggingPosChanges = unlockedChanges.filter(
         (c) => c.type === 'position' && c.position,
       );
@@ -991,7 +1048,7 @@ function CanvasInner() {
           const draggedIds = new Set(
             draggingPosChanges.flatMap((change) => change.type === 'position' ? [change.id] : []),
           );
-          snapped = changes.map((change) => {
+          snapped = hydratedChanges.map((change) => {
             if (change.type !== 'position' || !change.position || !draggedIds.has(change.id)) return change;
             return {
               ...change,
@@ -1004,13 +1061,13 @@ function CanvasInner() {
         }
       }
 
-      // Detect group node removals 閳?convert to ungroup
+      // Detect group node removals — convert to ungroup
       const removedIds = snapped
         .filter((c) => c.type === 'remove')
         .map((c) => c.id);
 
-      // 韫囶偊鈧喕鐭惧鍕剁窗缁绢垱瀚嬮幏?闁瀚ㄩ崣妯绘纯閿涘牊妫ら崚鐘绘珟閿涘鈧柡鈧?閻劌鍤遍弫鏉跨础閺囧瓨鏌婇敍灞筋潗缂佸牆鐔€娴滃孩娓堕弬?
-      // store.nodes閿涘矂浼╅崗宥呮彥闁喐瀚嬮崝銊︽闂傤厼瀵?nodes 鏉╁洦婀＄€佃壈鍤ч惃鍕閸斻劌宕辨い瑁も偓?
+      // 快速路径：纯拖拽/选择变更（无删除）—— 用函数式更新，始终基于最新
+      // store.nodes，避免快速拖动时闭包 nodes 过期导致的抖动卡顿。
       if (removedIds.length === 0) {
         useAppStore.setState((s) => ({
           nodes: applyNodeChanges(snapped, s.nodes) as RFNode<BaseNodeData>[],
@@ -1023,7 +1080,7 @@ function CanvasInner() {
     [applySnap, applyStableNodeChanges],
   );
 
-  // 閳光偓閳光偓 閹锋牕鍙嗙€诡偅鐗搁崚鍡涙殔閿涙俺绻橀崗銉ㄥΝ閻愮瀵栭崶瀛樻▔缁€铏圭級閻ｃ儱娴橀敍灞藉涧閺堝鈹栭弽鐓庡帒鐠佸憡鏂佺純?閳光偓閳光偓
+  // ── 拖入宫格分镜：进入节点范围显示缩略图，只有空格允许放置 ──
   const sbDropTarget = useRef<HTMLElement | null>(null);
   const [dropGhost, setDropGhost] = useState<{
     url: string;
@@ -1062,8 +1119,8 @@ function CanvasInner() {
   }, []);
 
   /**
-   * 閸涙垝鑵戦崚鍡涙殔鐞涖劎娈戦悽濠氭桨閺嶇鈧?
-   * 娑撳骸顔傞弽闂寸瑝閸氬矉绱濆鑼拨鐎规氨娈戦弽鐓庣摍娑旂喐甯撮崣妤佹杹缂冾喒鈧柡鈧梻娲块幒銉﹀床缂佹埊绱濆В鏂垮帥鐟欙絿绮﹂崘宥嗗珛娑撯偓濞嗭繝銆庨幍瀣ㄢ偓?
+   * 命中分镜表的画面格。
+   * 与宫格不同，已绑定的格子也接受放置——直接换绑，比先解绑再拖一次顺手。
    */
   const findShotlistDropHit = useCallback((
     node: RFNode,
@@ -1082,7 +1139,7 @@ function CanvasInner() {
     return null;
   }, []);
 
-  // 閹稿绱堕弽鍥︾秴缂冾喖鎳℃稉顓烆唫閺嶈壈濡悙閫涚瑢閻喎鐤勭粚鐑樼壐閿涘苯鍚嬬€瑰湱缂夐弨鎯ф嫲闂堢偛娼庨崠鈧懛顏勭暰娑斿顔傞弽绗衡偓?
+  // 按鼠标位置命中宫格节点与真实空格，兼容缩放和非均匀自定义宫格。
   const findStoryboardDropHit = useCallback((
     node: RFNode,
     clientX: number,
@@ -1106,6 +1163,10 @@ function CanvasInner() {
 
   const handleNodeDrag = useCallback(
     (e: React.MouseEvent, node: RFNode) => {
+      const liveNode = hydrateCanvasNodeData(
+        node as RFNode<BaseNodeData>,
+        useAppStore.getState().nodes,
+      );
       const folder = node.type === 'group'
         ? null
         : document.elementsFromPoint(e.clientX, e.clientY)
@@ -1128,8 +1189,8 @@ function CanvasInner() {
         clearSbDropTarget();
         if (cell) { cell.classList.add('sb-cell--drop-target'); sbDropTarget.current = cell; }
       }
-      // 鏉╂稑鍙嗙€诡偅鐗搁懞鍌滃仯閸氬酣娈ｉ挊蹇曟埂鐎圭偠濡悙鐧哥幢缁岀儤鐗告稉濠傗偓鐐灘鐞涖劎銇氶崣顖涙杹缂冾噯绱濋崡鐘垫暏閸栧搫鐓欐穱婵囧瘮濮樻潙閽╅妴?
-      const url = (node.data?.imageUrl || node.data?.thumbnailUrl) as string | undefined;
+      // 进入宫格节点后隐藏真实节点；空格上倾斜表示可放置，占用区域保持水平。
+      const url = (liveNode.data?.imageUrl || liveNode.data?.thumbnailUrl) as string | undefined;
       if (hit && url) {
         setDropGhost({ url, x: e.clientX, y: e.clientY, canDrop: cell != null });
         if (ghostNodeId.current !== node.id) {
@@ -1142,7 +1203,7 @@ function CanvasInner() {
         clearGhostNodeHidden();
       }
 
-      // 閸掑棝鏆呯悰銊ф暰闂堛垺鐗搁敍姘涧閸嬫岸鐝禍顕嗙礉娑撳秹娈ｉ挊蹇氼潶閹锋牜娈戦懞鍌滃仯閳ユ柡鈧梻绮︾€规艾鎮楃€瑰啩绮涚憰浣烘殌閸︺劎鏁剧敮鍐х瑐
+      // 分镜表画面格：只做高亮，不隐藏被拖的节点——绑定后它仍要留在画布上
       const frameCell = findShotlistDropHit(node, e.clientX, e.clientY);
       if (frameCell !== shotlistDropTarget.current) {
         clearShotlistDropTarget();
@@ -1155,10 +1216,14 @@ function CanvasInner() {
     [findStoryboardDropHit, clearSbDropTarget, clearGhostNodeHidden, findShotlistDropHit, clearShotlistDropTarget, clearFolderDropTarget],
   );
 
-  // 閳光偓閳光偓 Auto group/ungroup on drag stop 閳光偓閳光偓
+  // ── Auto group/ungroup on drag stop ──
   const handleNodeDragStop = useCallback(
     (event: React.MouseEvent, node: RFNode) => {
-      setCanvasInteraction('node', false);
+      const liveNode = hydrateCanvasNodeData(
+        node as RFNode<BaseNodeData>,
+        useAppStore.getState().nodes,
+      );
+      endCanvasInteraction('node');
       const cell = findStoryboardDropHit(node, event.clientX, event.clientY)?.emptyCell ?? null;
       const frameCell = findShotlistDropHit(node, event.clientX, event.clientY);
       clearSbDropTarget();
@@ -1184,10 +1249,10 @@ function CanvasInner() {
           return;
         }
       }
-      settleNodeGroupingOnDragStop(node as RFNode<BaseNodeData>);
+      settleNodeGroupingOnDragStop(liveNode);
       onNodeDragStop();
     },
-    [onNodeDragStop, settleNodeGroupingOnDragStop, findStoryboardDropHit, clearSbDropTarget, clearGhostNodeHidden, setCanvasInteraction, findShotlistDropHit, clearShotlistDropTarget, clearFolderDropTarget],
+    [onNodeDragStop, settleNodeGroupingOnDragStop, findStoryboardDropHit, clearSbDropTarget, clearGhostNodeHidden, endCanvasInteraction, findShotlistDropHit, clearShotlistDropTarget, clearFolderDropTarget],
   );
 
   return (
@@ -1216,6 +1281,7 @@ function CanvasInner() {
         onEdgesChange={handleEdgesChange}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
+        zIndexMode="manual"
         connectionMode={ConnectionMode.Loose}
         connectionRadius={64}
         onlyRenderVisibleElements
@@ -1247,12 +1313,12 @@ function CanvasInner() {
             variant={BackgroundVariant.Dots}
             gap={20}
             size={1}
-            color={canvasBackground === 'off-white' ? 'rgba(51,54,77,0.18)' : 'var(--theme-hover)'}
-            />
+            color="var(--theme-hover)"
+          />
         )}
 
 
-        {/* Mini Map 閳?interactive navigator, toggle with M key */}
+        {/* Mini Map — interactive navigator, toggle with M key */}
         {minimapVisible && (
           <>
             <MiniMap
@@ -1274,7 +1340,13 @@ function CanvasInner() {
           </>
         )}
 
-        {/* 閹垮秳缍旂拋鏉跨秿 閳?閹俱倝鏀?/ 鏉╂ê甯?+ 閸欘垰娲栧┃顖滄畱閹垮秳缍旈崚妤勩€?*/}
+        {/* Canvas Controls */}
+        <Controls
+          className="canvas-controls !bg-canvas-card !border-canvas-border !shadow-lg !rounded-xl overflow-hidden"
+          showInteractive={false}
+        />
+
+        {/* 操作记录 — 撤销 / 还原 + 可回溯的操作列表 */}
         <Panel position="top-right" className="canvas-history-slot">
           <HistoryTimelinePanel />
         </Panel>
@@ -1314,8 +1386,8 @@ function CanvasInner() {
             smoothLine={smoothLine}
             onToggleGrid={toggleGrid}
             onToggleLine={() => setSmoothLine((v) => !v)}
-            onOpenShortcuts={openShortcuts}
-            onFitView={fitView}
+            onOpenShortcuts={openShortcutsSettings}
+            onFitView={fitCanvasView}
           />
         </Panel>
 
@@ -1421,7 +1493,7 @@ function CanvasInner() {
       <MultiSelectToolbar />
     </div>
 
-    {/* 閹锋牕鍙嗙€诡偅鐗搁敍姘冲Ν閻愮瀵栭崶鏉戝敶閺勫墽銇氱紓鈺冩殣閸ユ拝绱濈粚鐑樼壐娑撳﹤鈧偓鏋╃悰銊с仛閸欘垱鏂佺純?*/}
+    {/* 拖入宫格：节点范围内显示缩略图，空格上倾斜表示可放置 */}
     {dropGhost && createPortal(
       <div
         className={`sb-drag-ghost${dropGhost.canDrop ? '' : ' sb-drag-ghost--over-storyboard'}`}

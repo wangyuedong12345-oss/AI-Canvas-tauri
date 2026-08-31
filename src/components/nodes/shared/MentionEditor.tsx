@@ -15,6 +15,8 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useVideoPosterRevision } from '../../../services/videoPosterCache';
 import PopupCloseButton from '../../shared/PopupCloseButton';
 import MentionPicker, { type MentionPickerChip, type MentionPickerItem } from '../../shared/MentionPicker';
+import ViewportImage from '../../shared/ViewportImage';
+import ViewportVideo from '../../shared/ViewportVideo';
 import {
   DRAMA_MENTION_MERGE_ALL,
   buildDramaMentionId,
@@ -1288,9 +1290,9 @@ const MentionEditor = forwardRef<MentionEditorHandle, MentionEditorProps>(functi
                           onClick={() => handleSelectAsset(file)}
                         >
                           {file.assetUrl && isVideoAsset(file) ? (
-                            <video src={file.assetUrl} muted playsInline preload="metadata" />
+                            <ViewportVideo src={file.assetUrl} muted playsInline preload="metadata" />
                           ) : file.assetUrl ? (
-                            <img src={file.assetUrl} alt={file.name} loading="lazy" decoding="async" />
+                            <ViewportImage src={file.assetUrl} alt={file.name} />
                           ) : (
                             <span className="asset-picker-card-icon">
                               {file.category === 'video' ? '🎬' : file.category === 'audio' ? '🎵' : file.category === 'text' ? '📄' : '📁'}

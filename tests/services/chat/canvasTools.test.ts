@@ -174,6 +174,39 @@ describe('canvas agent tools', () => {
     expect(useAppStore.getState().nodes).toHaveLength(2);
   });
 
+  it('treats storyboard grids as image-cut results instead of generatable nodes', async () => {
+    const createTool = getAgentTool('canvas_create_nodes')!;
+    expect(createTool.inputSchema.properties).toMatchObject({
+      nodes: { items: { properties: { type: { enum: expect.not.arrayContaining(['ai-storyboard']) } } } },
+    });
+
+    const created = await createTool.execute(context(), {
+      nodes: [{ type: 'ai-storyboard', label: '九宫格', prompt: '生成九宫格分镜' }],
+    });
+    expect(created.status).toBe('error');
+    expect(created.summary).toContain('只能由已有图片裁切产生');
+    expect(useAppStore.getState().nodes).toHaveLength(2);
+
+    useAppStore.setState({
+      nodes: [
+        ...useAppStore.getState().nodes,
+        node('grid', { type: 'ai-storyboard', imageUrl: 'asset://localhost/D:/data/grid.png' }),
+      ],
+    });
+    const updated = await getAgentTool('canvas_update_nodes')!.execute(context(), {
+      nodeIds: ['grid'],
+      prompt: '不应写入宫格',
+    });
+    expect(updated.status).toBe('error');
+    expect(updated.summary).toContain('不能设置生成提示词');
+    expect(useAppStore.getState().nodes.at(-1)?.data.prompt).toBeUndefined();
+
+    const run = await getAgentTool('canvas_run_nodes')!.execute(context(), { nodeIds: ['grid'] });
+    expect(run.status).toBe('error');
+    expect(run.summary).toContain('不能运行生成');
+    expect(executeGeneration).not.toHaveBeenCalled();
+  });
+
   it('returns structured node detail without leaking local media paths', async () => {
     const result = await getAgentTool('canvas_query')!.execute(context(), { detail: true });
     const payload = JSON.parse(result.modelContent);
@@ -244,6 +277,52 @@ describe('canvas agent tools', () => {
       expect.objectContaining({ field: '提示词', before: '一只猫', after: '一只戴红围巾的猫' }),
       expect.objectContaining({ field: '画面比例', before: undefined, after: '16:9' }),
     ]));
+  });
+
+  it('maps standardized video controls onto video node protocol fields', async () => {
+    useAppStore.setState({
+      nodes: [
+        ...useAppStore.getState().nodes,
+        node('n3', { displayId: 3, type: 'ai-video' }, { x: 800, y: 100 }),
+      ],
+    });
+
+    const definition = getAgentTool('canvas_update_nodes')!;
+    expect(definition.inputSchema.properties).toMatchObject({
+      videoResolution: { type: 'string' },
+      videoDuration: { type: 'integer' },
+    });
+    const result = await definition.execute(context(), {
+      nodeIds: ['n3'],
+      videoResolution: '768P',
+      videoDuration: 4,
+    });
+
+    expect(result.status).toBe('success');
+    expect(useAppStore.getState().nodes.find((item) => item.id === 'n3')?.data).toMatchObject({
+      seedanceResolution: '768P',
+      seedanceDuration: 4,
+    });
+    expect(result.display?.changes).toEqual(expect.arrayContaining([
+      expect.objectContaining({ field: '视频分辨率', before: undefined, after: '768P' }),
+      expect.objectContaining({ field: '视频时长', before: undefined, after: 4 }),
+    ]));
+
+    const queried = await getAgentTool('canvas_query')!.execute(context(), {
+      nodeIds: ['n3'],
+      detail: true,
+    });
+    expect(JSON.parse(queried.modelContent).nodes[0]).toMatchObject({
+      videoResolution: '768P',
+      videoDuration: 4,
+    });
+
+    const guarded = await definition.execute(context(), {
+      nodeIds: ['n1'],
+      videoDuration: 4,
+    });
+    expect(guarded.status).toBe('error');
+    expect(guarded.summary).toContain('只能用于视频节点');
   });
 
   it('rejects absolute moves that target more than one node', async () => {

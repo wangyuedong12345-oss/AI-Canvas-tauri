@@ -5,6 +5,7 @@
 import type { ReactNode } from 'react';
 import type { FileCategory } from '../../services/fileService';
 import { CATEGORY_ICONS, formatSize } from '../../utils/assetFormat';
+import ViewportImage from './ViewportImage';
 
 interface AssetThumbProps {
   assetUrl?: string;
@@ -39,7 +40,7 @@ export default function AssetThumb({ assetUrl, name, category, size, badge, chil
 
   return assetUrl ? (
     <div className="assets-card-img-wrap">
-      <img src={assetUrl} alt={name} className="assets-card-img" loading="lazy" decoding="async" draggable={false} />
+      <ViewportImage src={assetUrl} alt={name} className="assets-card-img" draggable={false} />
       <span className="assets-card-size">{formatSize(size)}</span>
       {badge && <span className="assets-card-badge">{badge}</span>}
       {children}

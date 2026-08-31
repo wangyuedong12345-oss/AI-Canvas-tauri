@@ -11,21 +11,14 @@ import type {
   ModelGroup,
   WorkflowDefinition,
 } from '../../../types';
-import { getWorkflowCategory, CATEGORY_TO_NODE_TYPES, GENERAL_MODEL_CATEGORY_LABELS } from '../../../types';
+import { getWorkflowCategory } from '../../../types';
 import {
   defaultModelGroups,
   getConfiguredModelGroups,
-  isProviderCategoryVisible,
-  resolveConfiguredModelCategory,
+  getGeneralModelGroups,
 } from './defaultModels';
 import { useAppStore } from '../../../store/useAppStore';
 import { useT } from '../../../i18n';
-import {
-  OFFICIAL_PROVIDER_ID,
-  OFFICIAL_PROVIDER_BADGE,
-  OFFICIAL_PROVIDER_NAME,
-  isOfficialProviderAvailable,
-} from '../../../services/ai/officialProviderService';
 
 const MODEL_PREF_KEY = 'canvas-model-prefs';
 
@@ -58,20 +51,6 @@ function saveModelPref(nodeType: string, modelValue: string) {
     }
     localStorage.setItem(MODEL_PREF_KEY, JSON.stringify(prefs));
   } catch { /* ignore */ }
-}
-
-function createOfficialModelOption(model: GeneralModelConfig): ModelOption {
-  const category = resolveConfiguredModelCategory(model);
-  return {
-    value: `general/${model.id}`,
-    provider: 'general',
-    label: model.name,
-    description: model.description?.trim() || `ID: ${model.modelId}`,
-    inputModalities: model.inputModalities,
-    iconType: 'badge',
-    badgeText: OFFICIAL_PROVIDER_BADGE,
-    nodeTypes: CATEGORY_TO_NODE_TYPES[category],
-  };
 }
 
 interface ModelSelectorProps {
@@ -111,71 +90,29 @@ export default function ModelSelector({
   const configuredGeneralModels = config.generalModels || [];
   const dreaminaLoggedIn = !!config.dreaminaAuth?.loggedIn;
   const generalModels = generalModelsOverride ?? configuredGeneralModels;
-  const openApiKeySettings = useAppStore((s) => s.openApiKeySettings);
 
   const configuredGroups = useMemo(
     () => getConfiguredModelGroups(config, modelNodeType, groups, {
       filterSelectedModels: groups === defaultModelGroups,
-    }).filter((group) => group.id !== OFFICIAL_PROVIDER_ID),
+    }),
     [config, groups, modelNodeType],
   );
 
-  const officialGeneralModels = useMemo(() => (
-    generalModels
-      .map((gm) => ({ gm, category: resolveConfiguredModelCategory(gm) }))
-      .filter(({ gm, category }) => (
-        gm.providerConfigId === OFFICIAL_PROVIDER_ID
-        && CATEGORY_TO_NODE_TYPES[category].includes(modelNodeType)
-        && isProviderCategoryVisible(config, gm.providerConfigId, category)
-      ))
-      .map(({ gm }) => createOfficialModelOption(gm))
-  ), [config, generalModels, modelNodeType]);
-
-  const officialModelGroup: ModelGroup = useMemo(() => ({
-    id: OFFICIAL_PROVIDER_ID,
-    name: t(OFFICIAL_PROVIDER_NAME),
-    description: t('ZEROFRAME 官方模型接口'),
-    iconType: 'badge',
-    badgeText: OFFICIAL_PROVIDER_BADGE,
-    models: officialGeneralModels,
-  }), [officialGeneralModels, t]);
-
-  /** 动态生成「通用模型」分组 */
-  const generalModelGroup: ModelGroup | null = useMemo(() => {
-    if (generalModels.length === 0) return null;
-    const models: ModelOption[] = generalModels
-      .map((gm) => ({ gm, category: resolveConfiguredModelCategory(gm) }))
-      .filter(({ gm, category }) => (
-        gm.providerConfigId !== OFFICIAL_PROVIDER_ID &&
-        CATEGORY_TO_NODE_TYPES[category].includes(modelNodeType)
-        && isProviderCategoryVisible(config, gm.providerConfigId, category)
-      ))
-      .map(({ gm, category }) => ({
-        value: `general/${gm.id}`,
-        provider: 'general',
-        label: gm.name,
-        description: `ID: ${gm.modelId}`,
-        iconType: 'badge' as const,
-        badgeText: GENERAL_MODEL_CATEGORY_LABELS[category].slice(0, 2),
-        nodeTypes: CATEGORY_TO_NODE_TYPES[category],
-      }));
-    if (models.length === 0) return null;
-    return {
-      id: 'general-models',
-      name: t('通用模型'),
-      description: t('用户自定义的兼容接口模型'),
-      iconType: 'badge',
-      badgeText: 'GM',
-      models,
-    };
-  }, [config, generalModels, modelNodeType, t]);
+  /** 通用执行协议保持不变，只把内置 Sora2U 连接拆成独立厂商分组。 */
+  const generalModelGroups = useMemo(() => getGeneralModelGroups(
+    generalModels,
+    config,
+    modelNodeType,
+    {
+      genericName: t('通用模型'),
+      genericDescription: t('用户自定义的兼容接口模型'),
+    },
+  ), [config, generalModels, modelNodeType, t]);
 
   /** 合并默认分组与通用模型分组 */
   const allGroups = useMemo(() => {
-    const merged = [officialModelGroup, ...configuredGroups];
-    if (generalModelGroup) merged.push(generalModelGroup);
-    return merged;
-  }, [configuredGroups, generalModelGroup, officialModelGroup]);
+    return [...configuredGroups, ...generalModelGroups];
+  }, [configuredGroups, generalModelGroups]);
 
   // 默认分组收起，except defaultExpandedGroupIds（含通用模型默认展开）
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => {
@@ -191,15 +128,9 @@ export default function ModelSelector({
   const isGroupAvailable = useCallback(
     (groupId: string) => {
       // 通用模型分组：每个模型自带 API Key，始终可用
-      if (groupId === 'general-models') return true;
+      if (groupId === 'general-models' || groupId.startsWith('general-provider-')) return true;
       if (groupAvailability && groupId in groupAvailability) {
         return groupAvailability[groupId];
-      }
-      if (groupId === OFFICIAL_PROVIDER_ID) {
-        const provider = configProviders[OFFICIAL_PROVIDER_ID];
-        return isOfficialProviderAvailable()
-          && !!provider?.apiKey
-          && officialGeneralModels.length > 0;
       }
       // 即梦：走 OAuth 登录，无 API Key，按登录态判定
       if (groupId === 'dreamina') return dreaminaLoggedIn;
@@ -211,7 +142,7 @@ export default function ModelSelector({
       const provider = configProviders[providerKey];
       return !!provider?.apiKey;
     },
-    [configProviders, dreaminaLoggedIn, groupAvailability, officialGeneralModels.length],
+    [configProviders, dreaminaLoggedIn, groupAvailability],
   );
   const ref = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -286,7 +217,7 @@ export default function ModelSelector({
       ...g,
       models: g.models.filter((m) => m.nodeTypes.includes(modelNodeType)),
     }))
-    .filter((g) => g.models.length > 0 || g.id === OFFICIAL_PROVIDER_ID);
+    .filter((g) => g.models.length > 0);
 
   // 持久化偏好：优先 props 传入的 selectedModel，其次 localStorage 中的记录
   // 全景图/动画回退到生图偏好，分镜表回退到生文偏好
@@ -323,13 +254,7 @@ export default function ModelSelector({
 
   // 切换分组折叠（不可用分组拒绝展开）
   const toggleGroup = (groupId: string) => {
-    if (!isGroupAvailable(groupId)) {
-      if (groupId === OFFICIAL_PROVIDER_ID) {
-        openApiKeySettings(OFFICIAL_PROVIDER_ID);
-        setOpen(false);
-      }
-      return;
-    }
+    if (!isGroupAvailable(groupId)) return;
     setCollapsedGroups((prev) => {
       const next = new Set(prev);
       if (next.has(groupId)) next.delete(groupId);
@@ -376,19 +301,12 @@ export default function ModelSelector({
             const isCollapsed = collapsedGroups.has(group.id);
             const hasActiveModel = group.models.some((m) => m.value === effectiveModel);
             const groupAvailable = isGroupAvailable(group.id);
-            const disabledTooltip = group.id === OFFICIAL_PROVIDER_ID
-              ? (!isOfficialProviderAvailable()
-                  ? t('官方渠道配置缺失')
-                  : configProviders[OFFICIAL_PROVIDER_ID]?.apiKey
-                    ? t('未启用官方模型')
-                    : t('请先在设置中配置官方接口 API Key'))
-              : t('请先在设置中配置 {name} API Key', { name: group.name });
             return (
               <div key={group.id} className={`model-group${hasActiveModel ? ' has-active' : ''}`}>
                 <button
                   type="button"
                   className={`model-group-header${groupAvailable ? '' : ' disabled'}`}
-                  data-tooltip={groupAvailable ? undefined : disabledTooltip}
+                  data-tooltip={groupAvailable ? undefined : t('请先在设置中配置 {name} API Key', { name: group.name })}
                   onClick={(e) => {
                     e.stopPropagation();
                     toggleGroup(group.id);

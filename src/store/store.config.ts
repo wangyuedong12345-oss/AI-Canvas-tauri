@@ -95,7 +95,7 @@ function createGeneralModelId(providerConfigId: string, modelId: string): string
   return `provider-${safeProviderId}-${(hash >>> 0).toString(36)}`;
 }
 
-const GENERAL_MODEL_CATALOG_IDS = new Set(['custom-openai', 'xai', 'google', OFFICIAL_PROVIDER_ID]);
+const GENERAL_MODEL_CATALOG_IDS = new Set(['custom-openai', 'xai', 'google', 'sora2u', OFFICIAL_PROVIDER_ID]);
 
 function syncProviderModels(
   generalModels: GeneralModelConfig[],

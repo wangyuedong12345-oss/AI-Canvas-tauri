@@ -760,17 +760,17 @@ export default function Sidebar() {
       <button
         type="button"
         className="sidebar-btn-v3"
-        data-tooltip={t('画布助手')}
+        data-tooltip={t('AI 助手')}
+        aria-label={t('打开 AI 助手')}
         onClick={async () => {
           const store = useAppStore.getState();
           if (store.chatPanelDetached) {
-            // 已分离 → 收回内嵌
-            const { emitCloseChatWindow } = await import('../services/chat/chatWindowService');
+            // 保留独立显示偏好：窗口被关闭后，再次点击仍打开独立窗口。
             try {
-              await emitCloseChatWindow();
-              await invoke('close_chat_window');
-            } catch { /* ignore */ }
-            store.setChatPanelDetached(false);
+              await invoke('open_chat_window');
+            } catch {
+              store.showToast(t('打开独立窗口失败'), 'error');
+            }
           } else {
             store.toggleChat();
           }

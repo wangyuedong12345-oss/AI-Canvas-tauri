@@ -5,6 +5,11 @@ import type { AudioOutputFormat, AudioTtsVoice, ModelExecutionProfile, VideoMode
 import type { AudioGenerationPurpose } from './media';
 import type { ImageAnnotationLayer } from '@tenney95/xiaoluo-image-editor';
 import type { CanvasNoteData } from './canvasNote';
+import type {
+  DirectorResultManifestReference,
+  DirectorRuntimeKind,
+  DirectorSceneReference,
+} from './directorScene';
 import type { ShotlistColumnKey, ShotRow } from './shotlist';
 import type { Locale } from '../i18n';
 
@@ -28,6 +33,32 @@ export type {
   CanvasNoteTextAlign,
 } from './canvasNote';
 export { createCanvasNoteData, DEFAULT_CANVAS_NOTE_STYLE, isCanvasNoteKind } from './canvasNote';
+
+export type {
+  DirectorBlendProjectArtifact,
+  DirectorCamera,
+  DirectorCameraInterpolation,
+  DirectorCameraKeyframe,
+  DirectorCoordinateSystem,
+  DirectorEnvironment,
+  DirectorFrameImageArtifact,
+  DirectorProjectFileReference,
+  DirectorReferenceVideoArtifact,
+  DirectorResultArtifact,
+  DirectorResultManifest,
+  DirectorResultManifestReference,
+  DirectorResultProducer,
+  DirectorRuntimeKind,
+  DirectorScene,
+  DirectorSceneEntity,
+  DirectorSceneParent,
+  DirectorSceneReference,
+  DirectorShot,
+  DirectorTimeline,
+  DirectorTransform,
+  DirectorVector3,
+  DirectorWorldColor,
+} from './directorScene';
 
 export type { ShotFrameBinding, ShotFrameCandidate, ShotlistColumnKey, ShotRow } from './shotlist';
 export {
@@ -228,10 +259,13 @@ export interface BaseNodeData {
   shotlistRows?: ShotRow[];                 // 逐行镜头
   shotlistColumns?: ShotlistColumnKey[];    // 当前显示的列（常驻列恒在其中）
   // ── 3D 导演台（ai-director）──
+  directorRuntimeKind?: DirectorRuntimeKind; // 缺失=lightweight-web；未知运行时必须失败关闭
   directorInstanceId?: string;           // 导演台 localStorage 隔离实例 ID
   directorStatus?: 'idle' | 'open' | 'ready';
   directorCaptureUrls?: string[];        // 从导演台同步的截图 URL 列表
   directorCaptureFilePaths?: string[];   // 对应本地路径
+  directorScene?: DirectorSceneReference; // 结构化 Director Scene 的不可变项目文件引用
+  directorResultManifest?: DirectorResultManifestReference; // 当前结果清单的不可变项目文件引用
   /** 轻量笔记/绘图元素。与 AI 生成节点数据语义隔离。 */
   note?: CanvasNoteData;
   [key: string]: unknown;
@@ -256,6 +290,26 @@ export interface OutputHistoryEntry {
   params?: Record<string, unknown>; // 生成参数快照
 }
 
+/** 单集创作要点；只描述写作结构。 */
+export interface EpisodeCreativeInfo {
+  /** 本集要完成的叙事任务。 */
+  task?: string;
+  /** 对立双方、争夺目标与失败代价。 */
+  coreConflict?: string;
+  /** 开场几秒内建立的冲突或悬念。 */
+  openingHook?: string;
+  /** 本集的关键反转或情绪爆点。 */
+  reversal?: string;
+  /** 结尾未完成动作、揭露或关系反转。 */
+  endingHook?: string;
+  /** 按发生顺序排列的主要情节点。 */
+  beats?: string[];
+  /** 目标时长（秒），仅用于创作统计提示。 */
+  targetDurationSec?: number;
+  /** 原著章节、页码或段落范围。 */
+  sourceRange?: string;
+}
+
 export interface CanvasProject {
   id: string;
   name: string;
@@ -276,8 +330,12 @@ export interface CanvasProject {
   parentId?: string;
   /** 分集序号，从 1 开始；仅分集项目有。 */
   episodeNo?: number;
-  /** 本集大纲或剧本片段；仅分集项目有。 */
+  /** 本集大纲；仅分集项目有。旧项目继续兼容此字段。 */
   episodeOutline?: string;
+  /** 本集完整剧本正文；与大纲分开保存。 */
+  episodeScript?: string;
+  /** 本集结构化创作要点。 */
+  episodeCreative?: EpisodeCreativeInfo;
   /** 剧集级原著与剧本；仅剧集项目有。 */
   series?: ProjectSeriesInfo;
 }
@@ -510,7 +568,7 @@ export interface AppConfig {
   dreaminaAuth?: DreaminaAuthData; // 即梦登录态
   baseDataDir?: string;       // 用户自定义文件保存根目录，保存结构为 {baseDataDir}/{projectId}/**
   generalModels?: GeneralModelConfig[]; // 用户自建通用模型
-  sidebarFloating?: boolean;  // 侧边栏是否悬浮显示（半隐于窗口边缘），默认 true
+  sidebarFloating?: boolean;  // 侧边栏是否悬浮显示（半隐于窗口边缘），默认 false
   windowGlassFrame?: boolean; // 是否显示主窗口玻璃外框，默认 true
   performanceMode?: boolean; // 性能模式：关闭高开销视觉效果与装饰动画，默认 false
   /** @deprecated 仅用于读取早期图形兼容模式配置，加载后迁移到 performanceMode。 */

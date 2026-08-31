@@ -15,7 +15,11 @@ import { MAX_IMAGE_BATCH_COUNT, type AudioOutputFormat, type AudioTtsVoice, type
 import { generateText, generateImage, generateImagesBatch, generateVideo, generateAudio, buildPanoramaPrompt } from '../../services/aiService';
 import { persistAudioGenerationResult } from '../../services/ai/generateAudio';
 import { downloadUrlAndSave } from '../../services/fileService';
-import { applyImageBatchResults } from '../../services/imageBatchService';
+import {
+  applyImageBatchResults,
+  failImageBatchNodes,
+  prepareImageBatchNodes,
+} from '../../services/imageBatchService';
 import { createCharacterDirectionGrid } from '../../services/onnxService';
 import PromptPanel from './shared/PromptPanel';
 import type { MentionEditorHandle } from './shared/MentionEditor';
@@ -34,11 +38,8 @@ import {
   buildAnimationSpritePrompt,
   resolveAnimationSheetAspectRatio,
 } from '../../services/ai/animationPrompt';
+import { resolveVideoSubmissionControls } from '../../services/ai/videoRequestResolver';
 import { buildGenerationCameraPrompt } from './shared/image/cameraStudio';
-import {
-  resolveVideoDurationSeconds,
-  videoFramesFromDuration,
-} from '../../services/aiDimensions';
 import { cancelComfyUINodeTask } from '../../services/comfyWorkflowService';
 import { useT } from '../../i18n';
 
@@ -331,12 +332,18 @@ function AINodeDialog() {
       );
     };
     updateNodeDataTransient(activeNodeId!, { status: 'loading', error: undefined });
+    let batchNodeIds: string[] | undefined;
     try {
       const batchCount = Math.min(MAX_IMAGE_BATCH_COUNT, Math.max(1, Math.floor(Number(latestData.batchCount) || 1)));
       if (nodeType === 'ai-image' && batchCount > 1) {
         if (postProcess) throw new Error(t('批量生成暂不支持图片后处理，请将数量设为 1'));
         const imageSize = (latestData.imageSize as string) || '2K';
         const aspectRatio = (latestData.aspectRatio as string) || '1:1';
+        batchNodeIds = prepareImageBatchNodes({
+          nodeId: submittingNodeId,
+          count: batchCount,
+          projectId: submittingProjectId,
+        }).nodeIds;
         showToast(t('正在批量生成 {count} 张图片', { count: batchCount }));
         const batch = await generateImagesBatch({
           prompt: effectivePrompt,
@@ -351,6 +358,7 @@ function AINodeDialog() {
         if (!isStillCurrentSubmission()) return;
         await applyImageBatchResults({
           nodeId: submittingNodeId,
+          targetNodeIds: batchNodeIds,
           batch,
           projectId: submittingProjectId,
           prompt: effectivePrompt,
@@ -505,16 +513,23 @@ function AINodeDialog() {
         });
         showToast(t('全景图生成完成'));
       } else if (nodeType === 'ai-video') {
-        const videoResolution = (latestData.videoResolution as number) || 832;
-        const videoFps = (latestData.videoFps as number) || 24;
-        const seedanceDuration = resolveVideoDurationSeconds(
-          latestData.seedanceDuration as number | undefined,
-          latestData.videoFrames as number | undefined,
+        const {
+          videoResolution,
           videoFps,
-        );
-        const videoFrames = videoFramesFromDuration(seedanceDuration, videoFps);
-        const seedanceResolution = (latestData.seedanceResolution as string) || '720p';
-        const seedanceRatio = (latestData.seedanceRatio as string) || '16:9';
+          videoFrames,
+          seedanceResolution,
+          seedanceRatio,
+          seedanceDuration,
+        } = resolveVideoSubmissionControls({
+          provider: nodeProvider,
+          workflowId: latestData.workflowId,
+          videoResolution: latestData.videoResolution as number | undefined,
+          videoFps: latestData.videoFps as number | undefined,
+          videoFrames: latestData.videoFrames as number | undefined,
+          seedanceResolution: latestData.seedanceResolution as string | undefined,
+          seedanceRatio: latestData.seedanceRatio as string | undefined,
+          seedanceDuration: latestData.seedanceDuration as number | undefined,
+        });
         const generateAudio = latestData.generateAudio as boolean | undefined;
         const result = await generateVideo({
           prompt: effectivePrompt,
@@ -693,6 +708,7 @@ function AINodeDialog() {
         return;
       }
       if (!isStillCurrentSubmission()) return;
+      if (batchNodeIds) failImageBatchNodes(batchNodeIds, msg, submittingProjectId);
       updateNodeDataTransient(activeNodeId!, { status: 'error', error: msg });
       recordOutputHistory(activeNodeId!, {
         nodeId: activeNodeId!,
@@ -761,10 +777,19 @@ function AINodeDialog() {
         model: model.value,
         provider: model.provider,
         audioPurpose: model.audioPurpose,
+        ...(nodeType === 'ai-video' && model.provider === 'general' ? {
+          videoResolution: undefined,
+          videoFps: undefined,
+          videoFrames: undefined,
+          seedanceResolution: undefined,
+          seedanceRatio: undefined,
+          seedanceDuration: undefined,
+          generateAudio: undefined,
+        } : {}),
         ...(model.provider === 'dreamina' ? { batchCount: 1 } : {}),
       });
     },
-    [activeNodeId, updateNodeData]
+    [activeNodeId, nodeType, updateNodeData]
   );
 
   const onWorkflowSelect = useCallback(
@@ -810,19 +835,19 @@ function AINodeDialog() {
   );
 
   const onChangeVideoFps = useCallback(
-    (value: number) => updateNodeData(activeNodeId!, { videoFps: value }),
+    (value: number | undefined) => updateNodeData(activeNodeId!, { videoFps: value }),
     [activeNodeId, updateNodeData]
   );
 
   const onChangeSeedanceResolution = useCallback(
-    (value: string) => updateNodeData(activeNodeId!, { seedanceResolution: value }),
+    (value: string | undefined) => updateNodeData(activeNodeId!, { seedanceResolution: value }),
     [activeNodeId, updateNodeData]
   );
 
   const onChangeSeedanceRatio = useCallback(
-    (value: string) => {
+    (value: string | undefined) => {
       const updateData: Partial<BaseNodeData> = { seedanceRatio: value };
-      const dimensions = getVideoNodeDimensionsForAspectRatio(value);
+      const dimensions = value ? getVideoNodeDimensionsForAspectRatio(value) : null;
       if (dimensions) Object.assign(updateData, dimensions);
 
       updateNodeData(activeNodeId!, updateData);
@@ -831,12 +856,12 @@ function AINodeDialog() {
   );
 
   const onChangeSeedanceDuration = useCallback(
-    (value: number) => updateContinuousNodeData({ seedanceDuration: value }),
+    (value: number | undefined) => updateContinuousNodeData({ seedanceDuration: value }),
     [updateContinuousNodeData]
   );
 
   const onChangeGenerateAudio = useCallback(
-    (value: boolean) => updateNodeData(activeNodeId!, { generateAudio: value }),
+    (value: boolean | undefined) => updateNodeData(activeNodeId!, { generateAudio: value }),
     [activeNodeId, updateNodeData]
   );
 
@@ -1034,13 +1059,13 @@ function AINodeDialog() {
           onChangeBatchCount={onChangeBatchCount}
           cameraSettings={data.cameraSettings}
           onChangeCameraSettings={onChangeCameraSettings}
-          videoResolution={(data.videoResolution as number) || 832}
-          videoFps={(data.videoFps as number) || 24}
-          videoFrames={(data.videoFrames as number) || 77}
+          videoResolution={data.videoResolution as number | undefined}
+          videoFps={data.videoFps as number | undefined}
+          videoFrames={data.videoFrames as number | undefined}
           onChangeVideoResolution={onChangeVideoResolution}
           onChangeVideoFps={onChangeVideoFps}
-          seedanceResolution={(data.seedanceResolution as string) || '720p'}
-          seedanceRatio={(data.seedanceRatio as string) || '16:9'}
+          seedanceResolution={data.seedanceResolution as string | undefined}
+          seedanceRatio={data.seedanceRatio as string | undefined}
           seedanceDuration={data.seedanceDuration as number | undefined}
           generateAudio={data.generateAudio as boolean | undefined}
           videoReferences={data.videoReferences}
