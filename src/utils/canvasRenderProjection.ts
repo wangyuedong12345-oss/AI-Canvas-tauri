@@ -22,7 +22,7 @@ export interface CanvasEdgeProjection {
 
 let indexedNodes: readonly CanvasNode[] | null = null;
 const indexedNodeById = new Map<string, CanvasNode>();
-const edgeProjectionCache = new WeakMap<readonly Edge[], CanvasEdgeProjection>();
+const edgeProjectionCache = new WeakMap<readonly Edge[], Map<boolean, CanvasEdgeProjection>>();
 
 function rebuildNodeIndex(nodes: readonly CanvasNode[]): void {
   indexedNodeById.clear();
@@ -195,11 +195,27 @@ export function projectTransientCanvasNode(node: CanvasNode): CanvasNode {
   return applyCanvasNodeRenderLayout(node, node.data);
 }
 
-export function createCanvasEdgeProjection(edges: readonly Edge[]): CanvasEdgeProjection {
-  const cached = edgeProjectionCache.get(edges);
+function resolveScissorBaseEdgeType(edge: Edge, smoothLine: boolean): string {
+  return edge.type === 'smoothstep' || (!edge.type && smoothLine) ? 'smoothstep' : 'default';
+}
+
+function withScissorHoverEdge(edge: Edge, smoothLine: boolean): Edge {
+  return withCanvasEdgeLayer({
+    ...edge,
+    type: 'scissor-hover',
+    data: {
+      ...edge.data,
+      baseEdgeType: resolveScissorBaseEdgeType(edge, smoothLine),
+    },
+  });
+}
+
+export function createCanvasEdgeProjection(edges: readonly Edge[], smoothLine: boolean): CanvasEdgeProjection {
+  const cachedByMode = edgeProjectionCache.get(edges);
+  const cached = cachedByMode?.get(smoothLine);
   if (cached) return cached;
 
-  const layeredEdges = edges.map(withCanvasEdgeLayer);
+  const layeredEdges = edges.map((edge) => withScissorHoverEdge(edge, smoothLine));
   const incidentEdgeIndexesByNodeId = new Map<string, number[]>();
   const addIncidentIndex = (nodeId: string, edgeIndex: number) => {
     const indexes = incidentEdgeIndexesByNodeId.get(nodeId);
@@ -213,7 +229,8 @@ export function createCanvasEdgeProjection(edges: readonly Edge[]): CanvasEdgePr
   });
 
   const projection = { layeredEdges, incidentEdgeIndexesByNodeId };
-  edgeProjectionCache.set(edges, projection);
+  if (cachedByMode) cachedByMode.set(smoothLine, projection);
+  else edgeProjectionCache.set(edges, new Map([[smoothLine, projection]]));
   return projection;
 }
 
@@ -237,12 +254,11 @@ export function projectSelectedCanvasEdges(
     const edge = projection.layeredEdges[edgeIndex];
     selectedEdges[edgeIndex] = withCanvasEdgeLayer({
       ...edge,
-      type: 'selected-node-flow',
       data: {
         ...edge.data,
-        selectedNodeFlowBaseType: edge.type === 'smoothstep' || (!edge.type && smoothLine)
-          ? 'smoothstep'
-          : 'default',
+        selectedNodeFlow: true,
+        baseEdgeType: edge.data?.baseEdgeType
+          ?? (edge.type === 'smoothstep' || (!edge.type && smoothLine) ? 'smoothstep' : 'default'),
       },
     });
   }

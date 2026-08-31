@@ -183,21 +183,24 @@ describe('canvas render projection', () => {
       { id: 'dd', source: 'd', target: 'd' },
       { id: 'ef', source: 'e', target: 'f' },
     ];
-    const projection = createCanvasEdgeProjection(edges);
+    const projection = createCanvasEdgeProjection(edges, false);
 
-    expect(createCanvasEdgeProjection(edges)).toBe(projection);
+    expect(createCanvasEdgeProjection(edges, false)).toBe(projection);
     expect(projection.incidentEdgeIndexesByNodeId.get('d')).toEqual([2]);
     expect(projectSelectedCanvasEdges(projection, [], false)).toBe(projection.layeredEdges);
+    expect(projection.layeredEdges[0].type).toBe('scissor-hover');
+    expect(projection.layeredEdges[1].data?.baseEdgeType).toBe('smoothstep');
 
     const selected = projectSelectedCanvasEdges(projection, ['b', 'd'], false);
     expect(selected[0]).not.toBe(projection.layeredEdges[0]);
     expect(selected[1]).not.toBe(projection.layeredEdges[1]);
     expect(selected[2]).not.toBe(projection.layeredEdges[2]);
     expect(selected[3]).toBe(projection.layeredEdges[3]);
-    expect(selected[0].type).toBe('selected-node-flow');
-    expect(selected[1].data?.selectedNodeFlowBaseType).toBe('smoothstep');
-    expect(selected[2].data?.selectedNodeFlowBaseType).toBe('default');
-    expect(edges.every((edge) => edge.type !== 'selected-node-flow')).toBe(true);
+    expect(selected[0].type).toBe('scissor-hover');
+    expect(selected[0].data?.selectedNodeFlow).toBe(true);
+    expect(selected[1].data?.baseEdgeType).toBe('smoothstep');
+    expect(selected[2].data?.baseEdgeType).toBe('default');
+    expect(edges.every((edge) => edge.type !== 'scissor-hover')).toBe(true);
   });
 
   it('keeps a far connected node available to @ through the full Store graph', () => {

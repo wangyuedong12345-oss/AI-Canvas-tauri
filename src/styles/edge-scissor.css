@@ -2,8 +2,14 @@
   /* Container group for edge + scissors */
 }
 
+.scissor-hover-edge-hit-path {
+  fill: none;
+  stroke: transparent;
+  pointer-events: stroke;
+}
+
 .scissor-hover-edge-btn {
-  pointer-events: none;
+  pointer-events: auto;
 }
 
 .scissor-hover-edge-btn-inner {

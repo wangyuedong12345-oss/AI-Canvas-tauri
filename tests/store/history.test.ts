@@ -499,12 +499,15 @@ describe('batch canvas history', () => {
   });
 
   it('offers upstream node types when a connection starts from an input handle', () => {
-    expect(getConnectionMenuOptions('ai-video', 'output')).toEqual([]);
+    expect(getConnectionMenuOptions('ai-video', 'output').map((option) => option.type)).toEqual([
+      'ai-video',
+    ]);
     expect(getConnectionMenuOptions('ai-video', 'input').map((option) => option.type)).toEqual([
       'ai-text',
       'ai-image',
       'ai-storyboard',
       'ai-director',
+      'ai-video',
     ]);
   });
 

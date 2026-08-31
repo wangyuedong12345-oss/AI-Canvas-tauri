@@ -5,7 +5,6 @@ import { lazy, Suspense, useCallback, useState, useEffect, useMemo, useRef } fro
 import { createPortal } from 'react-dom';
 import { ReactFlow,
   Background,
-  Controls,
   MiniMap,
   BackgroundVariant,
   ConnectionMode,
@@ -46,6 +45,7 @@ import MultiSelectToolbar from './canvas/MultiSelectToolbar';
 import CanvasEmptyState from './canvas/CanvasEmptyState';
 import HistoryTimelinePanel from './canvas/HistoryTimelinePanel';
 import SelectedNodeFlowEdge from './canvas/SelectedNodeFlowEdge';
+import ScissorHoverEdge from './canvas/ScissorHoverEdge';
 import CanvasRadialMenu, { CanvasLongPressIndicator } from './canvas/CanvasRadialMenu';
 import { useConnectionDropMenu } from '../hooks/useConnectionDropMenu';
 import { useCanvasContextMenu } from '../hooks/useCanvasContextMenu';
@@ -137,6 +137,7 @@ const nodeTypes: NodeTypes = withNodeRenderBoundaries({
 });
 
 const edgeTypes: EdgeTypes = {
+  'scissor-hover': ScissorHoverEdge,
   'selected-node-flow': SelectedNodeFlowEdge,
 };
 
@@ -396,7 +397,6 @@ function CanvasInner() {
   const minimapVisible = useAppStore((s) => s.minimapVisible);
   const closeNodeDialog = useAppStore((s) => s.closeNodeDialog);
   const setSettingsOpen = useAppStore((s) => s.setSettingsOpen);
-  const setSettingsInitialTab = useAppStore((s) => s.setSettingsInitialTab);
   const interactionMode = useAppStore((s) => s.config.interactionMode ?? 'default');
   const canvasNoteToolbarVisible = useAppStore((s) => s.config.canvasNoteToolbarVisible !== false);
   const [nodeProjectionCache] = useState(createCanvasNodeProjectionCache);
@@ -412,9 +412,8 @@ function CanvasInner() {
   const reactFlowInstance = useReactFlow();
   const updateNodeInternals = useUpdateNodeInternals();
   const openShortcutsSettings = useCallback(() => {
-    setSettingsInitialTab('shortcuts');
-    setSettingsOpen(true);
-  }, [setSettingsInitialTab, setSettingsOpen]);
+    setSettingsOpen(true, 'shortcuts');
+  }, [setSettingsOpen]);
   const fitCanvasView = useCallback(() => {
     void reactFlowInstance.fitView(FIT_VIEW_OPTIONS);
   }, [reactFlowInstance]);
@@ -1009,8 +1008,8 @@ function CanvasInner() {
 
   // 仅派生渲染状态，不把隐藏和节点选中效果写回可持久化的边数据。
   const edgeProjection = useMemo(
-    () => createCanvasEdgeProjection(renderableGraph.edges),
-    [renderableGraph.edges],
+    () => createCanvasEdgeProjection(renderableGraph.edges, smoothLine),
+    [renderableGraph.edges, smoothLine],
   );
   const renderedEdges = useMemo(() => {
     return projectSelectedCanvasEdges(edgeProjection, selectedNodeIds, smoothLine);
@@ -1339,12 +1338,6 @@ function CanvasInner() {
             <RoundedMiniMapMask />
           </>
         )}
-
-        {/* Canvas Controls */}
-        <Controls
-          className="canvas-controls !bg-canvas-card !border-canvas-border !shadow-lg !rounded-xl overflow-hidden"
-          showInteractive={false}
-        />
 
         {/* 操作记录 — 撤销 / 还原 + 可回溯的操作列表 */}
         <Panel position="top-right" className="canvas-history-slot">

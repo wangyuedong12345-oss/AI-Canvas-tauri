@@ -3,7 +3,6 @@ import {
   BaseEdge,
   getBezierPath,
   getSmoothStepPath,
-  getEdgeCenter,
   type EdgeProps,
 } from '@xyflow/react';
 import { Scissors } from 'lucide-react';
@@ -12,6 +11,7 @@ import { useAppStore } from '../../store/useAppStore';
 const SMOOTHSTEP_TYPE = 'smoothstep';
 const SCISSOR_WRAPPER = 36;
 const HOVER_DELAY_MS = 300;
+const HIDE_DELAY_MS = 120;
 const FLOW_HALF_LENGTH = 36;
 const FLOW_MASK_HALF_HEIGHT = 16;
 const FLOW_MASK_MARGIN = 256;
@@ -42,7 +42,9 @@ function ScissorHoverEdge({
   data,
 }: EdgeProps) {
   const [showScissors, setShowScissors] = useState(false);
+  const [scissorPosition, setScissorPosition] = useState<{ x: number; y: number } | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const onEdgesChange = useAppStore((s) => s.onEdgesChange);
   const flowId = useId().replace(/:/g, '');
   const edgeData = data as ScissorHoverEdgeData | undefined;
@@ -56,20 +58,49 @@ function ScissorHoverEdge({
     ? getSmoothStepPath(pathParams)
     : getBezierPath(pathParams);
 
-  const [centerX, centerY] = getEdgeCenter(pathParams);
+  const updateScissorPosition = useCallback((event: React.MouseEvent<SVGPathElement>) => {
+    const svg = event.currentTarget.ownerSVGElement;
+    const matrix = svg?.getScreenCTM();
+    if (!svg || !matrix) return;
+    const point = svg.createSVGPoint();
+    point.x = event.clientX;
+    point.y = event.clientY;
+    const localPoint = point.matrixTransform(matrix.inverse());
+    setScissorPosition({ x: localPoint.x, y: localPoint.y });
+  }, []);
 
-  const handleMouseEnter = useCallback(() => {
+  const handleMouseEnter = useCallback((event: React.MouseEvent<SVGPathElement>) => {
+    updateScissorPosition(event);
     if (timerRef.current) clearTimeout(timerRef.current);
+    if (hideTimerRef.current) {
+      clearTimeout(hideTimerRef.current);
+      hideTimerRef.current = null;
+    }
     timerRef.current = setTimeout(() => {
       setShowScissors(true);
     }, HOVER_DELAY_MS);
-  }, []);
+  }, [updateScissorPosition]);
 
   const handleMouseLeave = useCallback(() => {
     if (timerRef.current) {
       clearTimeout(timerRef.current);
       timerRef.current = null;
     }
+    if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+    hideTimerRef.current = setTimeout(() => {
+      setShowScissors(false);
+      hideTimerRef.current = null;
+    }, HIDE_DELAY_MS);
+  }, []);
+
+  const handleButtonMouseEnter = useCallback(() => {
+    if (hideTimerRef.current) {
+      clearTimeout(hideTimerRef.current);
+      hideTimerRef.current = null;
+    }
+  }, []);
+
+  const handleButtonMouseLeave = useCallback(() => {
     setShowScissors(false);
   }, []);
 
@@ -80,6 +111,7 @@ function ScissorHoverEdge({
   useEffect(() => {
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
+      if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
     };
   }, []);
 
@@ -95,11 +127,7 @@ function ScissorHoverEdge({
   const maskHeight = Math.abs(targetY - sourceY) + FLOW_MASK_MARGIN * 2;
 
   return (
-    <g
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
-      className="scissor-hover-edge-group"
-    >
+    <g className="scissor-hover-edge-group">
       <BaseEdge
         id={id}
         path={edgePath}
@@ -115,6 +143,14 @@ function ScissorHoverEdge({
         labelBgStyle={labelBgStyle}
         labelBgPadding={labelBgPadding}
         labelBgBorderRadius={labelBgBorderRadius}
+      />
+      <path
+        d={edgePath}
+        className="scissor-hover-edge-hit-path"
+        strokeWidth={interactionWidth ?? 20}
+        onMouseEnter={handleMouseEnter}
+        onMouseMove={updateScissorPosition}
+        onMouseLeave={handleMouseLeave}
       />
 
       {/** Selected-node flow animation overlay */}
@@ -170,16 +206,23 @@ function ScissorHoverEdge({
       )}
 
       {/** Scissors delete button on hover */}
-      {showScissors && (
+      {showScissors && scissorPosition && (
         <foreignObject
-          x={centerX - half}
-          y={centerY - half}
+          x={scissorPosition.x - half}
+          y={scissorPosition.y - half}
           width={SCISSOR_WRAPPER}
           height={SCISSOR_WRAPPER}
           className="scissor-hover-edge-btn"
           requiredExtensions="http://www.w3.org/1999/xhtml"
         >
-          <div className="scissor-hover-edge-btn-inner" onClick={handleDelete} role="button" tabIndex={-1}>
+          <div
+            className="scissor-hover-edge-btn-inner"
+            onMouseEnter={handleButtonMouseEnter}
+            onMouseLeave={handleButtonMouseLeave}
+            onClick={handleDelete}
+            role="button"
+            tabIndex={-1}
+          >
             <Scissors size={18} />
           </div>
         </foreignObject>
