@@ -20,6 +20,12 @@ import {
 } from './defaultModels';
 import { useAppStore } from '../../../store/useAppStore';
 import { useT } from '../../../i18n';
+import {
+  OFFICIAL_PROVIDER_ID,
+  OFFICIAL_PROVIDER_BADGE,
+  OFFICIAL_PROVIDER_NAME,
+  isOfficialProviderAvailable,
+} from '../../../services/ai/officialProviderService';
 
 const MODEL_PREF_KEY = 'canvas-model-prefs';
 
@@ -52,6 +58,20 @@ function saveModelPref(nodeType: string, modelValue: string) {
     }
     localStorage.setItem(MODEL_PREF_KEY, JSON.stringify(prefs));
   } catch { /* ignore */ }
+}
+
+function createOfficialModelOption(model: GeneralModelConfig): ModelOption {
+  const category = resolveConfiguredModelCategory(model);
+  return {
+    value: `general/${model.id}`,
+    provider: 'general',
+    label: model.name,
+    description: model.description?.trim() || `ID: ${model.modelId}`,
+    inputModalities: model.inputModalities,
+    iconType: 'badge',
+    badgeText: OFFICIAL_PROVIDER_BADGE,
+    nodeTypes: CATEGORY_TO_NODE_TYPES[category],
+  };
 }
 
 interface ModelSelectorProps {
@@ -91,13 +111,34 @@ export default function ModelSelector({
   const configuredGeneralModels = config.generalModels || [];
   const dreaminaLoggedIn = !!config.dreaminaAuth?.loggedIn;
   const generalModels = generalModelsOverride ?? configuredGeneralModels;
+  const openApiKeySettings = useAppStore((s) => s.openApiKeySettings);
 
   const configuredGroups = useMemo(
     () => getConfiguredModelGroups(config, modelNodeType, groups, {
       filterSelectedModels: groups === defaultModelGroups,
-    }),
+    }).filter((group) => group.id !== OFFICIAL_PROVIDER_ID),
     [config, groups, modelNodeType],
   );
+
+  const officialGeneralModels = useMemo(() => (
+    generalModels
+      .map((gm) => ({ gm, category: resolveConfiguredModelCategory(gm) }))
+      .filter(({ gm, category }) => (
+        gm.providerConfigId === OFFICIAL_PROVIDER_ID
+        && CATEGORY_TO_NODE_TYPES[category].includes(modelNodeType)
+        && isProviderCategoryVisible(config, gm.providerConfigId, category)
+      ))
+      .map(({ gm }) => createOfficialModelOption(gm))
+  ), [config, generalModels, modelNodeType]);
+
+  const officialModelGroup: ModelGroup = useMemo(() => ({
+    id: OFFICIAL_PROVIDER_ID,
+    name: t(OFFICIAL_PROVIDER_NAME),
+    description: t('ZEROFRAME 官方模型接口'),
+    iconType: 'badge',
+    badgeText: OFFICIAL_PROVIDER_BADGE,
+    models: officialGeneralModels,
+  }), [officialGeneralModels, t]);
 
   /** 动态生成「通用模型」分组 */
   const generalModelGroup: ModelGroup | null = useMemo(() => {
@@ -105,6 +146,7 @@ export default function ModelSelector({
     const models: ModelOption[] = generalModels
       .map((gm) => ({ gm, category: resolveConfiguredModelCategory(gm) }))
       .filter(({ gm, category }) => (
+        gm.providerConfigId !== OFFICIAL_PROVIDER_ID &&
         CATEGORY_TO_NODE_TYPES[category].includes(modelNodeType)
         && isProviderCategoryVisible(config, gm.providerConfigId, category)
       ))
@@ -130,10 +172,10 @@ export default function ModelSelector({
 
   /** 合并默认分组与通用模型分组 */
   const allGroups = useMemo(() => {
-    const merged = [...configuredGroups];
+    const merged = [officialModelGroup, ...configuredGroups];
     if (generalModelGroup) merged.push(generalModelGroup);
     return merged;
-  }, [configuredGroups, generalModelGroup]);
+  }, [configuredGroups, generalModelGroup, officialModelGroup]);
 
   // 默认分组收起，except defaultExpandedGroupIds（含通用模型默认展开）
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => {
@@ -153,6 +195,12 @@ export default function ModelSelector({
       if (groupAvailability && groupId in groupAvailability) {
         return groupAvailability[groupId];
       }
+      if (groupId === OFFICIAL_PROVIDER_ID) {
+        const provider = configProviders[OFFICIAL_PROVIDER_ID];
+        return isOfficialProviderAvailable()
+          && !!provider?.apiKey
+          && officialGeneralModels.length > 0;
+      }
       // 即梦：走 OAuth 登录，无 API Key，按登录态判定
       if (groupId === 'dreamina') return dreaminaLoggedIn;
       const providerKey = groupId === 'runninghubwf'
@@ -163,7 +211,7 @@ export default function ModelSelector({
       const provider = configProviders[providerKey];
       return !!provider?.apiKey;
     },
-    [configProviders, dreaminaLoggedIn, groupAvailability],
+    [configProviders, dreaminaLoggedIn, groupAvailability, officialGeneralModels.length],
   );
   const ref = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -238,7 +286,7 @@ export default function ModelSelector({
       ...g,
       models: g.models.filter((m) => m.nodeTypes.includes(modelNodeType)),
     }))
-    .filter((g) => g.models.length > 0);
+    .filter((g) => g.models.length > 0 || g.id === OFFICIAL_PROVIDER_ID);
 
   // 持久化偏好：优先 props 传入的 selectedModel，其次 localStorage 中的记录
   // 全景图/动画回退到生图偏好，分镜表回退到生文偏好
@@ -275,7 +323,13 @@ export default function ModelSelector({
 
   // 切换分组折叠（不可用分组拒绝展开）
   const toggleGroup = (groupId: string) => {
-    if (!isGroupAvailable(groupId)) return;
+    if (!isGroupAvailable(groupId)) {
+      if (groupId === OFFICIAL_PROVIDER_ID) {
+        openApiKeySettings(OFFICIAL_PROVIDER_ID);
+        setOpen(false);
+      }
+      return;
+    }
     setCollapsedGroups((prev) => {
       const next = new Set(prev);
       if (next.has(groupId)) next.delete(groupId);
@@ -322,12 +376,19 @@ export default function ModelSelector({
             const isCollapsed = collapsedGroups.has(group.id);
             const hasActiveModel = group.models.some((m) => m.value === effectiveModel);
             const groupAvailable = isGroupAvailable(group.id);
+            const disabledTooltip = group.id === OFFICIAL_PROVIDER_ID
+              ? (!isOfficialProviderAvailable()
+                  ? t('官方渠道配置缺失')
+                  : configProviders[OFFICIAL_PROVIDER_ID]?.apiKey
+                    ? t('未启用官方模型')
+                    : t('请先在设置中配置官方接口 API Key'))
+              : t('请先在设置中配置 {name} API Key', { name: group.name });
             return (
               <div key={group.id} className={`model-group${hasActiveModel ? ' has-active' : ''}`}>
                 <button
                   type="button"
                   className={`model-group-header${groupAvailable ? '' : ' disabled'}`}
-                  data-tooltip={groupAvailable ? undefined : t('请先在设置中配置 {name} API Key', { name: group.name })}
+                  data-tooltip={groupAvailable ? undefined : disabledTooltip}
                   onClick={(e) => {
                     e.stopPropagation();
                     toggleGroup(group.id);

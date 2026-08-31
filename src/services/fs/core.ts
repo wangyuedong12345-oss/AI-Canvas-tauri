@@ -534,9 +534,12 @@ export async function listDirectoryFiles(dirPath: string): Promise<AssetFileEntr
         const ext = `.${entry.name.split('.').pop()?.toLowerCase()}`;
         const extLower = ext.toLowerCase();
 
-        // Only generate assetUrl for image types
+        // Images and videos both need a browser-readable URL for previews.
         let assetUrl: string | undefined;
-        if (CATEGORY_EXTENSIONS.image.includes(extLower) && convertFileSrc) {
+        if (
+          (CATEGORY_EXTENSIONS.image.includes(extLower) || CATEGORY_EXTENSIONS.video.includes(extLower))
+          && convertFileSrc
+        ) {
           assetUrl = convertFileSrc(filePath);
         }
 

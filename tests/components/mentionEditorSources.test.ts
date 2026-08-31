@@ -61,6 +61,51 @@ describe('mentionEditorSources', () => {
     expect(candidates[0]).toMatchObject({ isSelf: true, outputType: 'image' });
   });
 
+  it('uses the video URL as the preview source for connected video mentions', () => {
+    const nodes = [
+      node('video-source', 'source-video', {
+        output: 'asset://generated-video.mp4',
+        videoUrl: 'asset://generated-video.mp4',
+      }),
+      node('target', 'ai-video'),
+    ];
+    const edges: Edge[] = [{ id: 'edge-video-target', source: 'video-source', target: 'target' }];
+
+    const candidates = resolveCanvasMentionNodes('target', nodes, edges);
+
+    expect(candidates[0]).toMatchObject({
+      id: 'video-source',
+      outputType: 'video',
+      type: 'source-video',
+      thumbnailUrl: 'asset://generated-video.mp4',
+    });
+  });
+
+  it('infers video mention type from the React Flow node type when data.type is missing', () => {
+    const nodes = [
+      {
+        id: 'video-source',
+        type: 'source-video',
+        position: { x: 0, y: 0 },
+        data: {
+          label: '参考视频',
+          videoUrl: 'asset://local-video',
+        },
+      } as Node<BaseNodeData>,
+      node('target', 'ai-video'),
+    ];
+    const edges: Edge[] = [{ id: 'edge-video-target', source: 'video-source', target: 'target' }];
+
+    const candidates = resolveCanvasMentionNodes('target', nodes, edges);
+
+    expect(candidates[0]).toMatchObject({
+      id: 'video-source',
+      outputType: 'video',
+      type: 'source-video',
+      thumbnailUrl: 'asset://local-video',
+    });
+  });
+
   it('maps workflow IO nodes only when a workflow is selected', () => {
     const ioNodes = [{ nodeId: '12', title: '提示词', type: 'prompt' as const }];
 

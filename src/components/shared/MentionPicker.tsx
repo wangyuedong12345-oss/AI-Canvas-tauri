@@ -6,7 +6,106 @@
  * 卡片走 onMouseDown + preventDefault，避免抢走 contenteditable 的光标。
  */
 import { Icon } from '@iconify/react';
-import type { ReactNode } from 'react';
+import { useCallback, useRef, useState, type ReactNode } from 'react';
+import { setCachedVideoPoster } from '../../services/videoPosterCache';
+import { afterVideoFramePresented } from '../../utils/videoSeek';
+
+const IMAGE_URL_RE = /(?:^data:image\/|\.(?:png|jpe?g|webp|gif|bmp|svg)(?:[?#]|$))/i;
+
+function primeVideoPreview(video: HTMLVideoElement): void {
+  const duration = Number.isFinite(video.duration) ? video.duration : 0;
+  const targetTime = duration > 0 ? Math.min(0.1, Math.max(0, duration - 0.05)) : 0;
+  if (Math.abs(video.currentTime - targetTime) < 0.01) return;
+  try {
+    video.currentTime = targetTime;
+  } catch {
+    // 保留浏览器默认首帧。
+  }
+}
+
+function captureVideoPoster(video: HTMLVideoElement): string | undefined {
+  if (video.videoWidth <= 0 || video.videoHeight <= 0) return undefined;
+  const maxDimension = 320;
+  const scale = Math.min(1, maxDimension / Math.max(video.videoWidth, video.videoHeight));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.round(video.videoWidth * scale));
+  canvas.height = Math.max(1, Math.round(video.videoHeight * scale));
+  const context = canvas.getContext('2d');
+  if (!context) return undefined;
+  context.drawImage(video, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL('image/jpeg', 0.82);
+}
+
+function MentionPickerVideoPreview({
+  source,
+  label,
+  posterCacheKey,
+}: {
+  source: string;
+  label: string;
+  posterCacheKey?: string;
+}) {
+  const [poster, setPoster] = useState<{ source: string; url: string } | null>(null);
+  const [failedSource, setFailedSource] = useState<string | null>(null);
+  const attemptedRef = useRef<string | null>(null);
+  const posterUrl = poster?.source === source ? poster.url : undefined;
+  const failed = failedSource === source;
+
+  const handleVideoReady = useCallback((event: React.SyntheticEvent<HTMLVideoElement>) => {
+    const video = event.currentTarget;
+    if (attemptedRef.current === source || posterUrl) return;
+    attemptedRef.current = source;
+
+    const grab = () => afterVideoFramePresented(video, () => {
+      try {
+        const nextPoster = captureVideoPoster(video);
+        if (!nextPoster) return;
+        setPoster({ source, url: nextPoster });
+        if (posterCacheKey) setCachedVideoPoster(posterCacheKey, nextPoster);
+      } catch {
+        // 跨域或受保护视频无法导出画布时，保留视频元素自身作为降级预览。
+      }
+    });
+
+    const duration = Number.isFinite(video.duration) ? video.duration : 0;
+    const targetTime = duration > 0 ? Math.min(Math.max(0.1, duration * 0.08), Math.max(0, duration - 0.05)) : 0;
+    if (Math.abs(video.currentTime - targetTime) < 0.01) {
+      grab();
+      return;
+    }
+    video.addEventListener('seeked', grab, { once: true });
+    try {
+      video.currentTime = targetTime;
+    } catch {
+      grab();
+    }
+  }, [posterCacheKey, posterUrl, source]);
+
+  if (posterUrl) {
+    return <img src={posterUrl} alt="" loading="lazy" draggable={false} />;
+  }
+
+  return (
+    <video
+      src={source}
+      aria-label={label}
+      muted
+      playsInline
+      preload="auto"
+      draggable={false}
+      style={failed ? { display: 'none' } : undefined}
+      onLoadedMetadata={(e) => {
+        primeVideoPreview(e.currentTarget);
+        handleVideoReady(e);
+      }}
+      onLoadedData={(e) => {
+        primeVideoPreview(e.currentTarget);
+        handleVideoReady(e);
+      }}
+      onError={() => setFailedSource(source)}
+    />
+  );
+}
 
 export interface MentionPickerTab {
   id: string;
@@ -24,6 +123,8 @@ export interface MentionPickerItem {
   key: string;
   label: string;
   thumbnailUrl?: string;
+  mediaType?: 'image' | 'video';
+  posterCacheKey?: string;
   /** 无缩略图时的占位图标（iconify 名） */
   icon?: string;
   /** 缩略图右上角小标，如 #3 / 自身 / 视频 */
@@ -135,7 +236,13 @@ export default function MentionPicker({
               <span className="mention-picker-card-media">
                 {/* 图标垫在底层：缩略图加载失败时自己隐藏，露出图标而不是空白卡 */}
                 <Icon icon={item.icon || 'mdi:vector-square'} width="26" height="26" />
-                {item.thumbnailUrl && (
+                {item.thumbnailUrl && item.mediaType === 'video' && !IMAGE_URL_RE.test(item.thumbnailUrl) ? (
+                  <MentionPickerVideoPreview
+                    source={item.thumbnailUrl}
+                    label={item.label}
+                    posterCacheKey={item.posterCacheKey}
+                  />
+                ) : item.thumbnailUrl && (
                   <img
                     src={item.thumbnailUrl}
                     alt=""

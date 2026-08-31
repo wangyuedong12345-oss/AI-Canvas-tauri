@@ -28,9 +28,11 @@ import { defaultModelGroups } from '../nodes/shared/defaultModels';
 import { shouldListProviderConnection } from './apiKeySettingsUtils';
 import { isSecretStoreAvailable } from '../../services/providerSecretService';
 import DreaminaLoginModal from './DreaminaLoginModal';
+import OfficialProviderCard from './OfficialProviderCard';
 import ProviderConnectionDialog from './ProviderConnectionDialog';
 import { invoke } from '@tauri-apps/api/core';
 import { useT } from '../../i18n';
+import { OFFICIAL_PROVIDER_ID } from '../../services/ai/officialProviderService';
 
 interface ProviderListItem {
   id: string;
@@ -129,6 +131,7 @@ export default function ApiKeySettings({ onClose }: { onClose: () => void }) {
   const providerItems = useMemo(() => {
     const items: ProviderListItem[] = [];
     for (const [id, providerConfig] of Object.entries(config.providers)) {
+      if (id === OFFICIAL_PROVIDER_ID) continue;
       if (id === 'runninghub') continue;
       const definition = getProviderDefinition(id, providerConfig);
       if (!definition) continue;
@@ -179,7 +182,10 @@ export default function ApiKeySettings({ onClose }: { onClose: () => void }) {
 
   // Agent 保存厂商配置后请求补填密钥：在渲染期直接生效，不用 effect 回写本地 state。
   // 任何一次手动开关对话框都视为消费掉该请求（关闭设置面板时 store 也会清空它）。
-  const requestedConnectionId = pendingApiKeyConnectionId && config.providers[pendingApiKeyConnectionId]
+  const officialFocusRequested = pendingApiKeyConnectionId === OFFICIAL_PROVIDER_ID;
+  const requestedConnectionId = pendingApiKeyConnectionId
+    && pendingApiKeyConnectionId !== OFFICIAL_PROVIDER_ID
+    && config.providers[pendingApiKeyConnectionId]
     ? pendingApiKeyConnectionId
     : null;
   const connectionDialogOpen = dialog.open || !!requestedConnectionId;
@@ -448,16 +454,11 @@ export default function ApiKeySettings({ onClose }: { onClose: () => void }) {
             {t('当前环境无法保存凭据，API Key 不会写入本地，仅本次会话有效。')}
           </p>
         )}
-        {providerItems.length === 0 ? (
-          <div className="provider-empty-state">
-            <span className="provider-empty-icon"><Icon icon="mdi:key-chain-variant" width="24" /></span>
-            <strong>{t('尚未添加 API 厂商')}</strong>
-            <AnimatedButton type="button" className="provider-primary-btn" onClick={openAddDialog}>
-              <Icon icon="mdi:plus" width="15" />
-              {t('添加厂商')}
-            </AnimatedButton>
-          </div>
-        ) : (
+        <OfficialProviderCard
+          focusRequested={officialFocusRequested}
+          onFocusConsumed={() => setPendingApiKeyConnectionId(null)}
+        />
+        {providerItems.length > 0 && (
           <div className="provider-connection-list">
             {providerItems.map((item) => {
               const definition = getProviderDefinition(item.id, item.config);

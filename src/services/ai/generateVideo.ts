@@ -205,9 +205,12 @@ export function assertVideoReferenceLimits(
   ];
   for (const { kind, count, max } of limits) {
     if (max === undefined || count <= max) continue;
+    const extra = kind === '参考视频'
+      ? '。参考视频还需要使用模型可下载的 URL，建议 mp4/mov、H.264/H.265，且总时长控制在模型文档允许范围内'
+      : '';
     throw new Error(max === 0
       ? `模型 "${modelName}" 不支持${kind}，请断开多余的连线`
-      : `模型 "${modelName}" 最多支持 ${max} 个${kind}，当前有 ${count} 个，请断开多余的连线`);
+      : `模型 "${modelName}" 最多支持 ${max} 个${kind}，当前有 ${count} 个，请断开多余的连线${extra}`);
   }
 }
 
@@ -242,11 +245,16 @@ export function buildGeneralVideoProtocolVariables(
   const lastImage = referenceInput.imageUrls.length > 1
     ? referenceInput.imageUrls[referenceInput.imageUrls.length - 1]
     : undefined;
-  // 带角色的参考图数组（[{ url, role }]），供协议模板按 image_with_roles 语义引用：
+  // 带角色的参考图数组（[{ url, role }]），供协议模板按 image_with_roles 语义引用。
+  // seedanceContent 则按火山方舟 content[] 结构同时承载图/视频/音频参考。
   // 首/尾帧保留原角色，其余参考图按 Seedance 约定写 reference_image；
   // 为空时置 undefined，让模板省略该字段而不是发出空数组。
   const imageReferences = (referenceInput.references ?? [])
     .filter((reference) => reference.kind === 'image');
+  const videoReferences = (referenceInput.references ?? [])
+    .filter((reference) => reference.kind === 'video');
+  const audioReferences = (referenceInput.references ?? [])
+    .filter((reference) => reference.kind === 'audio');
   const roleImages = imageReferences
     .map((reference, index) => ({
       url: referenceInput.imageUrls[index] ?? getMediaReferenceUrl(reference),
@@ -255,7 +263,16 @@ export function buildGeneralVideoProtocolVariables(
         : 'reference_image',
     }));
   const imageWithRoles = roleImages.length > 0 ? roleImages : undefined;
-  const seedanceContent = roleImages.length > 0
+  const roleVideos = videoReferences.map((reference, index) => ({
+    url: referenceInput.videoUrls[index] ?? getMediaReferenceUrl(reference),
+    role: 'reference_video',
+  }));
+  const roleAudios = audioReferences.map((reference, index) => ({
+    url: referenceInput.audioUrls[index] ?? getMediaReferenceUrl(reference),
+    role: 'reference_audio',
+  }));
+  const hasSeedanceReferences = roleImages.length > 0 || roleVideos.length > 0 || roleAudios.length > 0;
+  const seedanceContent = hasSeedanceReferences
     ? [
       ...(referenceInput.prompt.trim()
         ? [{ type: 'text', text: referenceInput.prompt.trim() }]
@@ -264,6 +281,16 @@ export function buildGeneralVideoProtocolVariables(
         type: 'image_url',
         image_url: { url: image.url },
         role: image.role,
+      })),
+      ...roleVideos.map((video) => ({
+        type: 'video_url',
+        video_url: { url: video.url },
+        role: video.role,
+      })),
+      ...roleAudios.map((audio) => ({
+        type: 'audio_url',
+        audio_url: { url: audio.url },
+        role: audio.role,
       })),
     ]
     : undefined;

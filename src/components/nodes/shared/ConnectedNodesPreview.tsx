@@ -15,6 +15,8 @@ import { useAppStore } from '../../../store/useAppStore';
 import type { BaseNodeData, StoryboardCellOverride } from '../../../types';
 import { useT } from '../../../i18n';
 import FullscreenOverlay from '../../shared/FullscreenOverlay';
+import { afterVideoFramePresented } from '../../../utils/videoSeek';
+import { getCachedVideoPoster, setCachedVideoPoster } from '../../../services/videoPosterCache';
 import {
   calculateDockOffset,
   createConnectedPreviewLongPressController,
@@ -35,6 +37,92 @@ interface ConnectedNodesPreviewProps {
 const OUTPUT_TYPE_ICON: Record<string, string> = {
   image: '🖼', video: '🎬', audio: '🎵', text: 'T', shotlist: '▦',
 };
+const IMAGE_URL_RE = /(?:^data:image\/|\.(?:png|jpe?g|webp|gif|bmp|svg)(?:[?#]|$))/i;
+
+function isImageUrl(url?: string): boolean {
+  return !!url && IMAGE_URL_RE.test(url);
+}
+
+function captureVideoPoster(video: HTMLVideoElement): string | undefined {
+  if (video.videoWidth <= 0 || video.videoHeight <= 0) return undefined;
+  const maxDimension = 320;
+  const scale = Math.min(1, maxDimension / Math.max(video.videoWidth, video.videoHeight));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.round(video.videoWidth * scale));
+  canvas.height = Math.max(1, Math.round(video.videoHeight * scale));
+  const context = canvas.getContext('2d');
+  if (!context) return undefined;
+  context.drawImage(video, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL('image/jpeg', 0.82);
+}
+
+function VideoPreviewThumb({
+  source,
+  poster,
+  label,
+  onPoster,
+}: {
+  source: string;
+  poster?: string;
+  label: string;
+  onPoster: (dataUrl: string) => void;
+}) {
+  const [capturedPoster, setCapturedPoster] = useState<{ source: string; url: string } | null>(null);
+  const attemptedRef = useRef<string | null>(null);
+  const posterUrl = isImageUrl(poster)
+    ? poster
+    : capturedPoster?.source === source
+      ? capturedPoster.url
+      : undefined;
+
+  useEffect(() => {
+    attemptedRef.current = null;
+  }, [source]);
+
+  const handleVideoReady = useCallback((event: React.SyntheticEvent<HTMLVideoElement>) => {
+    const video = event.currentTarget;
+    if (attemptedRef.current === source || posterUrl) return;
+    attemptedRef.current = source;
+
+    const grab = () => afterVideoFramePresented(video, () => {
+      try {
+        const nextPoster = captureVideoPoster(video);
+        if (!nextPoster) return;
+        setCapturedPoster({ source, url: nextPoster });
+        onPoster(nextPoster);
+      } catch {
+        // 跨域视频可能无法导出画布，保留视频元素自身的降级预览。
+      }
+    });
+
+    const duration = Number.isFinite(video.duration) ? video.duration : 0;
+    const targetTime = duration > 0 ? Math.min(Math.max(0.1, duration * 0.08), Math.max(0, duration - 0.05)) : 0;
+    if (Math.abs(video.currentTime - targetTime) < 0.01) {
+      grab();
+      return;
+    }
+    video.addEventListener('seeked', grab, { once: true });
+    try {
+      video.currentTime = targetTime;
+    } catch {
+      grab();
+    }
+  }, [onPoster, posterUrl, source]);
+
+  return posterUrl ? (
+    <img src={posterUrl} alt={label} className="thumb-img" loading="lazy" />
+  ) : (
+    <video
+      src={source}
+      className="thumb-img"
+      muted
+      playsInline
+      preload="auto"
+      onLoadedMetadata={handleVideoReady}
+      onLoadedData={handleVideoReady}
+    />
+  );
+}
 
 /** 单格 Sprite 信息：用于 hover 弹出的宫格网格渲染 */
 interface SbCellItem {
@@ -69,6 +157,7 @@ export default function ConnectedNodesPreview({
     useShallow((s) => ({ nodes: s.nodes, edges: s.edges })),
   );
   const hoveredMentionNodeId = useAppStore((s) => s.hoveredMentionNodeId);
+  const updateNodeDataTransient = useAppStore((s) => s.updateNodeDataTransient);
   const [fullscreenPreview, setFullscreenPreview] = useState<FullscreenPreviewItem | null>(null);
   const [suppressClickNodeId, setSuppressClickNodeId] = useState<string | null>(null);
 
@@ -117,10 +206,11 @@ export default function ConnectedNodesPreview({
           ? 'shotlist'
           : (data.imageUrl || directorThumb)
           ? 'image' : data.videoUrl ? 'video' : data.audioUrl ? 'audio' : 'text';
+        const cachedVideoPoster = outputType === 'video' ? getCachedVideoPoster(n.id) : undefined;
         const thumbnailUrl = outputType === 'image'
           ? (localAssetUrl(data.filePath as string | undefined) || (data.thumbnailUrl as string) || data.imageUrl || directorThumb || undefined)
           : outputType === 'video'
-          ? ((data.thumbnailUrl as string) || undefined) : undefined;
+          ? (cachedVideoPoster || (data.thumbnailUrl as string) || (data.videoUrl as string) || undefined) : undefined;
         const previewText = data.output ? String(data.output) : undefined;
         const textSnippet = outputType === 'text' && previewText
           ? previewText.slice(0, 50) : undefined;
@@ -302,9 +392,21 @@ export default function ConnectedNodesPreview({
             {/* 缩略图内容 */}
             {node.outputType === 'image' && node.thumbnailUrl ? (
               <img src={node.thumbnailUrl} alt={node.label} className="thumb-img" loading="lazy" />
-            ) : node.outputType === 'video' && node.thumbnailUrl ? (
+            ) : node.outputType === 'video' && (node.thumbnailUrl || node.mediaUrl) ? (
               <div className="thumb-video-wrap">
-                <img src={node.thumbnailUrl} alt={node.label} className="thumb-img" loading="lazy" />
+                {!isImageUrl(node.thumbnailUrl) ? (
+                  <VideoPreviewThumb
+                    source={node.mediaUrl || node.thumbnailUrl || ''}
+                    poster={node.thumbnailUrl}
+                    label={node.label}
+                    onPoster={(poster) => {
+                      setCachedVideoPoster(node.id, poster);
+                      updateNodeDataTransient(node.id, { thumbnailUrl: poster });
+                    }}
+                  />
+                ) : (
+                  <img src={node.thumbnailUrl} alt={node.label} className="thumb-img" loading="lazy" />
+                )}
                 <span className="thumb-play-icon">▶</span>
               </div>
             ) : node.outputType === 'text' && node.textSnippet ? (

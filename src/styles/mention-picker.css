@@ -136,7 +136,8 @@
 .mention-picker-card.active .mention-picker-card-media {
   border-color: var(--brand);
 }
-.mention-picker-card-media img {
+.mention-picker-card-media img,
+.mention-picker-card-media video {
   position: absolute;
   inset: 0;
   width: 100%;

@@ -18,6 +18,7 @@ import {
 import * as fileService from '../services/fileService';
 import { setBaseDataDir, syncAuthorizedDirectories } from '../services/fileService';
 import { deleteProviderSecret } from '../services/providerSecretService';
+import { OFFICIAL_PROVIDER_ID } from '../services/ai/officialProviderService';
 import { setLocale } from '../i18n';
 
 const defaultConfig: AppConfig = {
@@ -94,7 +95,7 @@ function createGeneralModelId(providerConfigId: string, modelId: string): string
   return `provider-${safeProviderId}-${(hash >>> 0).toString(36)}`;
 }
 
-const GENERAL_MODEL_CATALOG_IDS = new Set(['custom-openai', 'xai', 'google']);
+const GENERAL_MODEL_CATALOG_IDS = new Set(['custom-openai', 'xai', 'google', OFFICIAL_PROVIDER_ID]);
 
 function syncProviderModels(
   generalModels: GeneralModelConfig[],

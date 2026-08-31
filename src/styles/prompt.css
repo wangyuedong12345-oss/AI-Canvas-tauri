@@ -126,6 +126,15 @@
   border-color: color-mix(in srgb, var(--prompt-chip-accent) 30%, var(--theme-border));
   background: transparent;
 }
+.prompt-chip.chip-asset .prompt-chip-icon {
+  width: 16px;
+  height: 16px;
+  overflow: hidden;
+  border-radius: 4px;
+}
+.prompt-chip.chip-asset .prompt-chip-icon.has-thumbnail {
+  background: var(--black-alpha-30);
+}
 .prompt-chip-thumb {
   width: 16px;
   height: 16px;
@@ -730,7 +739,8 @@
   box-shadow: 0 4px 16px var(--black-alpha-30);
 }
 .asset-picker-card:active { transform: scale(0.97); }
-.asset-picker-card img {
+.asset-picker-card img,
+.asset-picker-card video {
   width: 100%;
   aspect-ratio: 1;
   object-fit: cover;

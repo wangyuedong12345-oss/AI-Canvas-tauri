@@ -672,19 +672,21 @@ describe('general video protocol variables', () => {
     });
   });
 
-  it('tags reference images as reference_image alongside frames in imageWithRoles', () => {
+  it('builds Seedance content with image, video and audio reference roles', () => {
     const withRoles = buildGeneralVideoProtocolVariables(
       'doubao-seedance-2.5',
       { model: 'general/seedance', provider: 'general', prompt: 'prompt' },
       {
         prompt: 'prompt',
         imageUrls: ['https://cdn.example/first.png', 'https://cdn.example/role.png'],
-        videoUrls: [],
-        audioUrls: [],
-        operation: 'image-to-video',
+        videoUrls: ['https://cdn.example/motion.mp4'],
+        audioUrls: ['https://cdn.example/music.mp3'],
+        operation: 'video-to-video',
         references: [
           { kind: 'image', url: 'https://cdn.example/first.png', origin: 'connection', role: 'first_frame' },
           { kind: 'image', url: 'https://cdn.example/role.png', origin: 'connection', role: 'reference' },
+          { kind: 'video', url: 'https://cdn.example/motion.mp4', origin: 'connection', role: 'reference' },
+          { kind: 'audio', url: 'https://cdn.example/music.mp3', origin: 'connection', role: 'reference_audio' },
         ],
       },
     );
@@ -696,6 +698,8 @@ describe('general video protocol variables', () => {
       { type: 'text', text: 'prompt' },
       { type: 'image_url', image_url: { url: 'https://cdn.example/first.png' }, role: 'first_frame' },
       { type: 'image_url', image_url: { url: 'https://cdn.example/role.png' }, role: 'reference_image' },
+      { type: 'video_url', video_url: { url: 'https://cdn.example/motion.mp4' }, role: 'reference_video' },
+      { type: 'audio_url', audio_url: { url: 'https://cdn.example/music.mp3' }, role: 'reference_audio' },
     ]);
 
     // 没有参考素材时置 undefined，模板才会省略 image_with_roles 而不是发出空数组
@@ -777,8 +781,13 @@ describe('video reference limits', () => {
       .toThrow('模型 "Seedance 900" 最多支持 9 个参考图，当前有 12 个');
     expect(() => assertVideoReferenceLimits(input({ image: 1, video: 1 }), capability, 'Seedance 900'))
       .toThrow('不支持参考视频');
+    expect(() => assertVideoReferenceLimits(input({ video: 4 }), { maxVideoReferences: 3 }, 'Seedance Mini'))
+      .toThrow('最多支持 3 个参考视频，当前有 4 个');
+    expect(() => assertVideoReferenceLimits(input({ video: 4 }), { maxVideoReferences: 3 }, 'Seedance Mini'))
+      .toThrow('模型可下载的 URL');
     // 正好到上限不拦
     expect(() => assertVideoReferenceLimits(input({ image: 9 }), capability, 'Seedance 900')).not.toThrow();
+    expect(() => assertVideoReferenceLimits(input({ video: 3 }), { maxVideoReferences: 3 }, 'Seedance Mini')).not.toThrow();
   });
 
   it('未声明上限的模型保持原有的不拦截行为', () => {

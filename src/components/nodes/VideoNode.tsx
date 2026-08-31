@@ -45,6 +45,11 @@ const DEFAULT_VIDEO_NODE_HEIGHT = 158;
 const VIDEO_NODE_MAX_DIMENSION = 320;
 const VIDEO_NODE_MIN_WIDTH = 180;
 const VIDEO_NODE_MIN_HEIGHT = 110;
+const IMAGE_URL_RE = /(?:^data:image\/|\.(?:png|jpe?g|webp|gif|bmp|svg)(?:[?#]|$))/i;
+
+function isImageUrl(url?: string): boolean {
+  return !!url && IMAGE_URL_RE.test(url);
+}
 
 function computeVideoNodeDimensions(videoWidth: number, videoHeight: number): { nodeWidth: number; nodeHeight: number } {
   if (videoWidth <= 0 || videoHeight <= 0) {
@@ -256,6 +261,9 @@ function AIVideoNode({ id, data, selected }: { id: string; data: BaseNodeData; s
           }
           if (!poster.blank) {
             setGeneratedCover({ source, dataUrl: poster.dataUrl });
+            if (!data.thumbnailUrl || data.thumbnailUrl === source || !isImageUrl(data.thumbnailUrl as string | undefined)) {
+              updateNodeDataTransient(id, { thumbnailUrl: poster.dataUrl });
+            }
             video.currentTime = 0;
           }
         } catch {
@@ -279,6 +287,7 @@ function AIVideoNode({ id, data, selected }: { id: string; data: BaseNodeData; s
     data.videoHeight,
     data.videoUrl,
     data.videoWidth,
+    data.thumbnailUrl,
     id,
     updateNodeDataTransient,
   ]);

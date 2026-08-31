@@ -10,4 +10,5 @@ describe('mention editor image reference indices', () => {
       'node:image-a',
     ])).toEqual([1, undefined, 2, 1]);
   });
+
 });

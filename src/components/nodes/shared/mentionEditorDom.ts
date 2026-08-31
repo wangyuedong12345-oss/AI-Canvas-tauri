@@ -7,7 +7,8 @@ import { convertFileSrc } from '@tauri-apps/api/core';
 import type { WorkflowIONodeType, StoryboardCellOverride } from '../../../types';
 import type { AppState } from '../../../store/useAppStore';
 import { useAppStore } from '../../../store/useAppStore';
-import { getFileCategory } from '../../../services/fileService';
+import { getFileCategory, type FileCategory } from '../../../services/fileService';
+import { getCachedVideoPoster, setCachedVideoPoster } from '../../../services/videoPosterCache';
 import { parseDramaMentionId } from '../../../types/dramaAssets';
 
 const IS_TAURI = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
@@ -19,6 +20,17 @@ const CHIP_STYLE: Record<string, string> = {
   'ai-audio': 'chip-audio',
   'ai-markdown': 'chip-markdown',
   'ai-storyboard': 'chip-image',
+  'source-image': 'chip-image',
+  'source-video': 'chip-video',
+  'source-audio': 'chip-audio',
+};
+const CHIP_FALLBACK_ICON: Record<string, string> = {
+  'ai-image': 'I',
+  'source-image': 'I',
+  'ai-video': 'V',
+  'source-video': 'V',
+  'ai-audio': 'A',
+  'source-audio': 'A',
 };
 const WF_IO_STYLE: Record<string, string> = {
   prompt: 'chip-workflow-prompt',
@@ -40,11 +52,122 @@ const IMAGE_REFERENCE_NODE_TYPES = new Set([
   'ai-panorama',
   'ai-animation',
 ]);
+const VIDEO_REFERENCE_NODE_TYPES = new Set([
+  'ai-video',
+  'source-video',
+]);
+const IMAGE_URL_RE = /(?:^data:image\/|\.(?:png|jpe?g|webp|gif|bmp|svg)(?:[?#]|$))/i;
+const VIDEO_URL_RE = /(?:^data:video\/|\.(?:mp4|webm|mov|avi|mkv|flv|wmv|m4v)(?:[?#]|$))/i;
+
+function isImageUrl(url?: string): boolean {
+  return !!url && IMAGE_URL_RE.test(url);
+}
+
+function stringValue(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+function inferAssetCategory(path: string, assetUrl?: string, category?: FileCategory): FileCategory {
+  if (category && category !== 'other') return category;
+  if (isImageUrl(assetUrl) || isImageUrl(path)) return 'image';
+  if ((assetUrl && VIDEO_URL_RE.test(assetUrl)) || VIDEO_URL_RE.test(path)) return 'video';
+  return getFileCategory(path.split(/[\\/]/).pop() || path);
+}
+
+function primeVideoPreview(video: HTMLVideoElement): void {
+  const seek = () => {
+    if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) return;
+    const duration = Number.isFinite(video.duration) ? video.duration : 0;
+    const targetTime = duration > 0 ? Math.min(0.1, Math.max(0, duration - 0.05)) : 0;
+    if (Math.abs(video.currentTime - targetTime) < 0.01) return;
+    try {
+      video.currentTime = targetTime;
+    } catch {
+      // 某些远程视频在 metadata 前后会拒绝 seek，保留浏览器默认首帧。
+    }
+  };
+  video.addEventListener('loadedmetadata', seek, { once: true });
+  video.addEventListener('loadeddata', seek, { once: true });
+}
+
+function captureVideoPoster(video: HTMLVideoElement): string | undefined {
+  if (video.videoWidth <= 0 || video.videoHeight <= 0) return undefined;
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.min(160, video.videoWidth));
+  canvas.height = Math.max(1, Math.round(canvas.width * (video.videoHeight / video.videoWidth)));
+  const context = canvas.getContext('2d');
+  if (!context) return undefined;
+  context.drawImage(video, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL('image/jpeg', 0.82);
+}
+
+function replaceIconWithImage(icon: HTMLElement, url: string): void {
+  icon.textContent = '';
+  icon.classList.add('has-thumbnail');
+  const image = document.createElement('img');
+  image.src = url;
+  image.className = 'prompt-chip-thumb';
+  image.alt = '';
+  icon.appendChild(image);
+}
+
+function captureVideoChipPoster(
+  icon: HTMLElement,
+  nodeId: string | undefined,
+  source: string,
+): void {
+  const video = document.createElement('video');
+  video.src = source;
+  video.className = 'prompt-chip-thumb prompt-chip-thumb-video-probe';
+  video.muted = true;
+  video.playsInline = true;
+  video.preload = 'auto';
+
+  let attempted = false;
+  const grab = () => {
+    if (attempted) return;
+    attempted = true;
+    window.setTimeout(() => {
+      try {
+        const poster = captureVideoPoster(video);
+        if (!poster) return;
+        if (nodeId) setCachedVideoPoster(nodeId, poster);
+        replaceIconWithImage(icon, poster);
+      } catch {
+        // 跨域视频无法导出画布时，保留视频元素作为降级预览。
+      }
+    }, 120);
+  };
+
+  video.addEventListener('loadeddata', grab, { once: true });
+  video.addEventListener('seeked', grab, { once: true });
+  primeVideoPreview(video);
+  icon.appendChild(video);
+}
+
+function renderChipMedia(
+  icon: HTMLElement,
+  nodeType: string,
+  thumbnailUrl: string | undefined,
+  videoUrl?: string,
+  nodeId?: string,
+): boolean {
+  if (!thumbnailUrl) return false;
+  icon.textContent = '';
+  icon.classList.add('has-thumbnail');
+  if ((nodeType === 'ai-video' || nodeType === 'source-video') && !isImageUrl(thumbnailUrl)) {
+    captureVideoChipPoster(icon, nodeId, thumbnailUrl || videoUrl || '');
+    return true;
+  }
+  replaceIconWithImage(icon, thumbnailUrl);
+  return true;
+}
 
 type NodeMeta = {
   type: string;
   displayId: number | undefined;
   thumbnailUrl?: string;
+  videoUrl?: string;
   imageReferenceKey?: string;
 };
 
@@ -70,20 +193,33 @@ export function bestNodeThumb(
   return data.thumbnailUrl as string | undefined;
 }
 
-export function getNodeMetaMap(nodes: AppState['nodes']) {
+export function getNodeMetaMap(nodes: AppState['nodes'], posterRevision = 0) {
+  void posterRevision;
   const cached = nodeMetaCache.get(nodes);
-  if (cached) return cached;
+  if (cached && posterRevision === 0) return cached;
   const map = new Map<string, NodeMeta>();
   for (const node of nodes) {
-    const type = (node.data.type as string) || '';
+    const nodeVideoUrl = stringValue(node.data.videoUrl);
+    const type = (node.data.type as string)
+      || (node.type as string)
+      || (nodeVideoUrl ? 'source-video' : '');
     const thumbnailUrl = bestNodeThumb(node.data);
+    const cachedVideoPoster = getCachedVideoPoster(node.id);
+    const videoUrl = nodeVideoUrl
+      || localAssetUrl(stringValue(node.data.filePath))
+      || (VIDEO_REFERENCE_NODE_TYPES.has(type) ? stringValue(node.data.output) : undefined)
+      || (VIDEO_REFERENCE_NODE_TYPES.has(type) ? stringValue(node.data.sourceUrl) : undefined);
+    const resolvedThumbnailUrl = VIDEO_REFERENCE_NODE_TYPES.has(type)
+      ? cachedVideoPoster || (isImageUrl(thumbnailUrl) ? thumbnailUrl : undefined) || videoUrl
+      : thumbnailUrl;
     const directorCaptureUrl = type === 'ai-director' && Array.isArray(node.data.directorCaptureUrls)
       ? node.data.directorCaptureUrls.find((url) => typeof url === 'string' && url.trim())
       : undefined;
     map.set(node.id, {
       type,
       displayId: node.data.displayId as number | undefined,
-      thumbnailUrl,
+      thumbnailUrl: resolvedThumbnailUrl,
+      videoUrl,
       imageReferenceKey: IMAGE_REFERENCE_NODE_TYPES.has(type) && (thumbnailUrl || directorCaptureUrl)
         ? `node:${node.id}${!thumbnailUrl && directorCaptureUrl ? ':cap0' : ''}`
         : undefined,
@@ -106,7 +242,7 @@ export function getNodeMetaMap(nodes: AppState['nodes']) {
       }
     }
   }
-  nodeMetaCache.set(nodes, map);
+  if (posterRevision === 0) nodeMetaCache.set(nodes, map);
   return map;
 }
 
@@ -172,6 +308,21 @@ export function syncImageReferenceLabels(root: HTMLElement, metaMap: Map<string,
   });
 }
 
+export function syncNodeChipMedia(root: HTMLElement, metaMap: Map<string, NodeMeta>): void {
+  const chips = Array.from(root.querySelectorAll<HTMLElement>('[data-ref-id]'));
+  for (const chip of chips) {
+    const nodeId = chip.getAttribute('data-ref-id');
+    if (!nodeId) continue;
+    const meta = metaMap.get(nodeId);
+    if (!meta?.thumbnailUrl) continue;
+    const icon = chip.querySelector<HTMLElement>('.prompt-chip-icon');
+    if (!icon) continue;
+    const existingMedia = icon.querySelector<HTMLImageElement | HTMLVideoElement>('.prompt-chip-thumb');
+    if (existingMedia?.getAttribute('src') === meta.thumbnailUrl) continue;
+    renderChipMedia(icon, meta.type, meta.thumbnailUrl, meta.videoUrl, nodeId);
+  }
+}
+
 export function serializeDOM(root: HTMLElement): string {
   let result = '';
   const walk = (node: Node) => {
@@ -223,16 +374,13 @@ export function buildChipEl(
   const icon = document.createElement('span');
   icon.className = 'prompt-chip-icon';
   icon.setAttribute('aria-hidden', 'true');
-  const isMedia = nodeType === 'ai-image' || nodeType === 'ai-video' || nodeType === 'ai-storyboard';
-  if (isMedia && meta?.thumbnailUrl) {
-    icon.classList.add('has-thumbnail');
-    const image = document.createElement('img');
-    image.src = meta.thumbnailUrl;
-    image.className = 'prompt-chip-thumb';
-    image.alt = '';
-    icon.appendChild(image);
-  } else {
-    icon.textContent = '@';
+  const isMedia = nodeType === 'ai-image'
+    || nodeType === 'source-image'
+    || nodeType === 'ai-video'
+    || nodeType === 'source-video'
+    || nodeType === 'ai-storyboard';
+  if (!isMedia || !renderChipMedia(icon, nodeType, meta?.thumbnailUrl, meta?.videoUrl, nodeId)) {
+    icon.textContent = CHIP_FALLBACK_ICON[nodeType] || '@';
   }
   span.appendChild(icon);
   if (meta?.displayId != null) {
@@ -244,24 +392,37 @@ export function buildChipEl(
   return span;
 }
 
-export function buildAssetChipEl(path: string, assetUrl?: string): HTMLSpanElement {
+export function buildAssetChipEl(path: string, assetUrl?: string, assetCategory?: FileCategory): HTMLSpanElement {
   const name = path.split(/[\\/]/).pop() || 'asset';
-  const isImage = getFileCategory(name) === 'image';
+  const category = inferAssetCategory(path, assetUrl, assetCategory);
+  const isImage = category === 'image';
+  const isVideo = category === 'video';
+  const previewUrl = assetUrl || ((isImage || isVideo) && IS_TAURI ? convertFileSrc(path) : undefined);
   const span = document.createElement('span');
-  span.className = 'prompt-chip chip-asset';
+  span.className = `prompt-chip chip-asset${isVideo ? ' chip-video' : ''}`;
   span.contentEditable = 'false';
   span.setAttribute('data-asset-path', path);
   if (isImage) span.setAttribute('data-image-ref-key', `asset:${encodeURIComponent(path)}`);
   const icon = document.createElement('span');
   icon.className = 'prompt-chip-icon';
-  if (isImage && assetUrl) {
+  if (isImage && previewUrl) {
     const image = document.createElement('img');
-    image.src = assetUrl;
+    image.src = previewUrl;
     image.className = 'prompt-chip-thumb';
     image.alt = '';
     icon.appendChild(image);
+  } else if (isVideo && previewUrl) {
+    icon.classList.add('has-thumbnail');
+    const video = document.createElement('video');
+    video.src = previewUrl;
+    video.className = 'prompt-chip-thumb';
+    video.muted = true;
+    video.playsInline = true;
+    video.preload = 'auto';
+    primeVideoPreview(video);
+    icon.appendChild(video);
   } else {
-    icon.textContent = isImage ? '🖼' : '📄';
+    icon.textContent = isImage ? '🖼' : isVideo ? '🎬' : '📄';
   }
   span.appendChild(icon);
   const label = document.createElement('span');

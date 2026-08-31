@@ -31,6 +31,14 @@ import { useMascotStatus } from './hooks/useMascotStatus';
 import { useMascotDrag } from './hooks/useMascotDrag';
 import { initComfyUIWindowBridge } from './services/comfyUIWindowService';
 import { invoke } from '@tauri-apps/api/core';
+import {
+  OFFICIAL_PROVIDER_ID,
+  OFFICIAL_PROVIDER_NAME,
+  fetchOfficialModels,
+  isOfficialProviderAvailable,
+  mergeOfficialModels,
+  officialProviderBaseUrl,
+} from './services/ai/officialProviderService';
 
 const isTauri = typeof window !== 'undefined' && '__TAURI__' in window;
 
@@ -135,6 +143,40 @@ export default function App() {
   const [updating, setUpdating] = useState(false);
   const configHydrated = useAppStore((state) => state.configHydrated);
   const mcpAutoStart = useAppStore((state) => state.config.mcpAutoStart === true);
+
+  useEffect(() => {
+    if (!configHydrated || !isOfficialProviderAvailable()) return;
+    const provider = useAppStore.getState().config.providers[OFFICIAL_PROVIDER_ID];
+    const apiKey = provider?.apiKey?.trim();
+    if (!apiKey) return;
+    let cancelled = false;
+    void fetchOfficialModels(apiKey).then(async (result) => {
+      if (cancelled) return;
+      const latest = useAppStore.getState();
+      const current = latest.config.providers[OFFICIAL_PROVIDER_ID];
+      if (!current?.apiKey?.trim()) return;
+      latest.saveProviderConfig(OFFICIAL_PROVIDER_ID, {
+        ...current,
+        name: OFFICIAL_PROVIDER_NAME,
+        apiKey: current.apiKey,
+        baseUrl: officialProviderBaseUrl(),
+        catalogId: OFFICIAL_PROVIDER_ID,
+        catalogModels: result.models,
+        selectedModels: mergeOfficialModels(result.models, current.selectedModels, current.officialHiddenModelIds),
+        catalogUpdatedAt: Date.now(),
+        officialStatus: 'connected',
+      });
+      await latest.saveConfig({ silent: true });
+    }).catch(async () => {
+      if (cancelled) return;
+      const latest = useAppStore.getState();
+      const current = latest.config.providers[OFFICIAL_PROVIDER_ID];
+      if (!current?.apiKey?.trim()) return;
+      latest.setProviderConfig(OFFICIAL_PROVIDER_ID, { officialStatus: 'failed' });
+      await latest.saveConfig({ silent: true });
+    });
+    return () => { cancelled = true; };
+  }, [configHydrated]);
 
   // 开屏动画结束后后台静默检查更新
   useEffect(() => {

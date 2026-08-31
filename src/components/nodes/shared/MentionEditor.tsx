@@ -12,6 +12,7 @@ import { getAllAssetMeta } from '../../../services/indexedDbService';
 import { springSmooth, fadeFast } from '../../../utils/motion';
 import { calcAnchoredPosition } from '../../../utils/popupPosition';
 import { AnimatePresence, motion } from 'framer-motion';
+import { useVideoPosterRevision } from '../../../services/videoPosterCache';
 import PopupCloseButton from '../../shared/PopupCloseButton';
 import MentionPicker, { type MentionPickerChip, type MentionPickerItem } from '../../shared/MentionPicker';
 import {
@@ -34,6 +35,7 @@ import {
   renderPromptToNodes,
   serializeDOM,
   syncImageReferenceLabels,
+  syncNodeChipMedia,
   ZWSP,
 } from './mentionEditorDom';
 import {
@@ -50,6 +52,14 @@ const MEDIA_ICONS: Record<'image' | 'video' | 'audio' | 'text', string> = {
   text: 'mdi:text-box-outline',
 };
 const DRAMA_KIND_LABELS: Record<string, string> = { character: '角色', scene: '场景', prop: '道具' };
+const ASSET_VIDEO_URL_RE = /(?:^data:video\/|\.(?:mp4|webm|mov|avi|mkv|flv|wmv|m4v)(?:[?#]|$))/i;
+
+function isVideoAsset(file: AssetFileEntry): boolean {
+  return file.category === 'video'
+    || ASSET_VIDEO_URL_RE.test(file.name)
+    || ASSET_VIDEO_URL_RE.test(file.path)
+    || (!!file.assetUrl && ASSET_VIDEO_URL_RE.test(file.assetUrl));
+}
 
 // ── Props ──
 export interface MentionEditorProps {
@@ -128,12 +138,14 @@ const MentionEditor = forwardRef<MentionEditorHandle, MentionEditorProps>(functi
   );
 
   // ── Build nodeId → { type, displayId, thumbnailUrl } map ──
-  const nodeMetaMap = useMemo(() => getNodeMetaMap(nodes), [nodes]);
+  const videoPosterRevision = useVideoPosterRevision();
+  const nodeMetaMap = useMemo(() => getNodeMetaMap(nodes, videoPosterRevision), [nodes, videoPosterRevision]);
 
   // ── Rebuild DOM when prompt changes externally ──
   useEffect(() => {
     const el = editorRef.current;
     if (!el) return;
+    syncNodeChipMedia(el, nodeMetaMap);
     syncImageReferenceLabels(el, nodeMetaMap);
     if (serializeDOM(el) === prompt) {
       // 删空后浏览器常残留 <br>，而 serializeDOM 会剥掉尾部换行使其「看起来为空」，
@@ -243,8 +255,8 @@ const MentionEditor = forwardRef<MentionEditorHandle, MentionEditorProps>(functi
   }, [nodeMetaMap, onChange]);
 
   const canvasMentionNodes = useMemo(
-    () => (showMention ? resolveCanvasMentionNodes(nodeId, nodes, edges) : []),
-    [edges, nodeId, nodes, showMention],
+    () => (showMention ? resolveCanvasMentionNodes(nodeId, nodes, edges, videoPosterRevision) : []),
+    [edges, nodeId, nodes, showMention, videoPosterRevision],
   );
   const workflowMentionNodes = useMemo(
     () => (showMention ? resolveWorkflowMentionNodes(selectedWorkflowId, workflowIONodes) : []),
@@ -583,7 +595,7 @@ const MentionEditor = forwardRef<MentionEditorHandle, MentionEditorProps>(functi
 
   // ── Insert an asset reference chip ──
   const insertAssetChipAtCursor = useCallback(
-    (path: string, assetUrl?: string) => {
+    (path: string, assetUrl?: string, category?: AssetFileEntry['category']) => {
       const el = editorRef.current;
       if (!el) return;
       const sel = window.getSelection();
@@ -593,7 +605,7 @@ const MentionEditor = forwardRef<MentionEditorHandle, MentionEditorProps>(functi
         range.selectNodeContents(el);
         range.collapse(false);
       }
-      const chip = buildAssetChipEl(path, assetUrl);
+      const chip = buildAssetChipEl(path, assetUrl, category);
       range.insertNode(chip);
       ensureCaretSlotBeforeChip(chip);
       range.setStartAfter(chip);
@@ -657,7 +669,7 @@ const MentionEditor = forwardRef<MentionEditorHandle, MentionEditorProps>(functi
         if (sel) { sel.removeAllRanges(); sel.addRange(saved); }
       }
       deleteAtChar();
-      insertAssetChipAtCursor(file.path, file.assetUrl);
+      insertAssetChipAtCursor(file.path, file.assetUrl, file.category);
       setShowAssetPicker(false);
       setMentionQuery('');
     },
@@ -978,6 +990,12 @@ const MentionEditor = forwardRef<MentionEditorHandle, MentionEditorProps>(functi
       key: `node:${node.id}`,
       label: node.label,
       thumbnailUrl: node.thumbnailUrl,
+      mediaType: node.outputType === 'video'
+        ? 'video' as const
+        : node.outputType === 'image'
+          ? 'image' as const
+          : undefined,
+      posterCacheKey: node.outputType === 'video' ? node.id : undefined,
       icon: MEDIA_ICONS[node.outputType],
       badge: node.isSelf ? '自身' : node.displayId != null ? `#${node.displayId}` : undefined,
       onSelect: () => handleSelectCanvasMention(node.id, node.label),
@@ -1021,6 +1039,7 @@ const MentionEditor = forwardRef<MentionEditorHandle, MentionEditorProps>(functi
         key: `drama-ref:${reference.id}`,
         label: CHARACTER_REFERENCE_KIND_LABELS[reference.kind],
         thumbnailUrl: reference.imageUrl,
+        mediaType: 'image' as const,
         onSelect: () => handleSelectDramaReference(drillItem, reference.id, reference.imageUrl),
       })),
     ]
@@ -1034,6 +1053,7 @@ const MentionEditor = forwardRef<MentionEditorHandle, MentionEditorProps>(functi
           key: `drama:${item.id}`,
           label: item.name,
           thumbnailUrl: thumb,
+          mediaType: thumb ? 'image' as const : undefined,
           icon: 'mdi:account-box-outline',
           badge: multiRef ? `${references.length} 图` : thumb ? undefined : '简介',
           onSelect: () => {
@@ -1267,7 +1287,9 @@ const MentionEditor = forwardRef<MentionEditorHandle, MentionEditorProps>(functi
                           data-tooltip={file.name}
                           onClick={() => handleSelectAsset(file)}
                         >
-                          {file.assetUrl ? (
+                          {file.assetUrl && isVideoAsset(file) ? (
+                            <video src={file.assetUrl} muted playsInline preload="metadata" />
+                          ) : file.assetUrl ? (
                             <img src={file.assetUrl} alt={file.name} loading="lazy" decoding="async" />
                           ) : (
                             <span className="asset-picker-card-icon">

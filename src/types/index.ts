@@ -405,6 +405,10 @@ export interface ApiProviderConfig {
   /** undefined 表示旧配置全部可见；空数组表示从所有节点模型列表隐藏该厂商。 */
   visibleModelCategories?: GeneralModelCategory[];
   catalogUpdatedAt?: number;
+  officialStatus?: 'unconfigured' | 'syncing' | 'connected' | 'failed' | 'unavailable';
+  officialModelSyncWarning?: string;
+  /** 官方渠道中用户主动关闭的模型 ID；下次同步新模型时保留关闭状态。 */
+  officialHiddenModelIds?: string[];
 }
 
 // 即梦/Dreamina OAuth 登录态（登录态由官方 dreamina_cli 持久化，此处仅镜像用于 UI）

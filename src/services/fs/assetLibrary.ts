@@ -93,7 +93,10 @@ export async function walkDirectoryFiles(
       if (out.length >= maxFiles) break;
       const ext = `.${r.name.split('.').pop()?.toLowerCase()}`;
       let assetUrl: string | undefined;
-      if (CATEGORY_EXTENSIONS.image.includes(ext) && convertFileSrc) {
+      if (
+        (CATEGORY_EXTENSIONS.image.includes(ext) || CATEGORY_EXTENSIONS.video.includes(ext))
+        && convertFileSrc
+      ) {
         assetUrl = convertFileSrc(r.filePath);
       }
       const identity = await identifyAsset(r.filePath, {

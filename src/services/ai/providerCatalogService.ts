@@ -22,6 +22,12 @@ import type {
   WebSearchProviderId,
 } from '../../types';
 import { corsSafeFetch } from './httpTransport';
+import {
+  OFFICIAL_PROVIDER_BADGE,
+  OFFICIAL_PROVIDER_ID,
+  OFFICIAL_PROVIDER_NAME,
+  officialProviderBaseUrl,
+} from './officialProviderService';
 import { baseUrlCandidates } from './providerBaseUrl';
 import { XAI_BASE_URL, XAI_MODEL_MANIFEST } from './providers/xaiModelManifest';
 import {
@@ -240,8 +246,19 @@ const BUILT_IN_PROVIDER_DEFINITIONS: ProviderDefinition[] = [
   },
 ];
 
+const OFFICIAL_PROVIDER_DEFINITION: ProviderDefinition = {
+  id: OFFICIAL_PROVIDER_ID,
+  name: OFFICIAL_PROVIDER_NAME,
+  description: 'ZEROFRAME 官方模型接口',
+  badgeText: OFFICIAL_PROVIDER_BADGE,
+  authType: 'api-key',
+  catalogAdapter: 'local-manifest',
+  defaultBaseUrl: officialProviderBaseUrl(),
+  credentials: [API_KEY_FIELD],
+};
+
 const PROVIDER_DEFINITION_MAP = new Map(
-  BUILT_IN_PROVIDER_DEFINITIONS.map((definition) => [definition.id, definition]),
+  [...BUILT_IN_PROVIDER_DEFINITIONS, OFFICIAL_PROVIDER_DEFINITION].map((definition) => [definition.id, definition]),
 );
 
 /**

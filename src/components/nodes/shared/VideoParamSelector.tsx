@@ -301,12 +301,21 @@ export default function VideoParamSelector({
       describeLimit(referenceLimits.maxAudioReferences, '个', '参考音频'),
     ].filter(Boolean).join('、')
     : '';
+  const videoReferenceFormatTip = referenceLimits?.maxVideoReferences
+    ? '参考视频需为模型可下载的 URL，建议 mp4/mov、H.264/H.265，且总时长控制在模型文档允许范围内。'
+    : '';
   const minDuration = seedanceCapability?.minDuration ?? VIDEO_DURATION_MIN_SECONDS;
   const maxDuration = seedanceCapability?.maxDuration ?? VIDEO_DURATION_MAX_SECONDS;
   // 文档写「仅支持 10 或 15 秒」这类离散取值时，只给这几档，不能用连续滑杆
   const allowedDurations = seedanceCapability?.durations?.length
     ? [...seedanceCapability.durations].sort((left, right) => left - right)
     : undefined;
+  const allowedDurationMin = allowedDurations?.[0];
+  const allowedDurationMax = allowedDurations?.[allowedDurations.length - 1];
+  const allowedDurationsAreContinuous = allowedDurations
+    ? allowedDurations.every((value, index, array) => index === 0 || value === array[index - 1] + 1)
+    : false;
+  const durationSliderUsesIndexes = Boolean(allowedDurations && !allowedDurationsAreContinuous);
   const resolvedDuration = seedanceDuration === undefined && seedanceCapability
     ? seedanceCapability.defaultDuration
     : resolveVideoDurationSeconds(seedanceDuration, videoFrames, videoFps, maxDuration);
@@ -315,6 +324,48 @@ export default function VideoParamSelector({
       Math.abs(value - resolvedDuration) < Math.abs(best - resolvedDuration) ? value : best
     ), allowedDurations[0])
     : Math.min(maxDuration, Math.max(minDuration, resolvedDuration));
+  const displayedDurationIndex = allowedDurations
+    ? Math.max(0, allowedDurations.findIndex((value) => value === displayedDuration))
+    : 0;
+  const durationSliderMin = durationSliderUsesIndexes ? 0 : (allowedDurationMin ?? minDuration);
+  const durationSliderMax = durationSliderUsesIndexes
+    ? Math.max(0, (allowedDurations?.length ?? 1) - 1)
+    : (allowedDurationMax ?? maxDuration);
+  const durationSliderValue = durationSliderUsesIndexes ? displayedDurationIndex : displayedDuration;
+  const durationFillPercent = durationSliderMax > durationSliderMin
+    ? ((durationSliderValue - durationSliderMin) / (durationSliderMax - durationSliderMin)) * 100
+    : 100;
+  const [durationInputDraft, setDurationInputDraft] = useState<string | null>(null);
+  const normalizeDurationInput = (value: number) => {
+    const rounded = Math.round(value);
+    if (allowedDurations?.length) {
+      if (allowedDurations.includes(rounded)) return rounded;
+      return allowedDurations.reduce((best, item) => (
+        Math.abs(item - rounded) < Math.abs(best - rounded) ? item : best
+      ), allowedDurations[0]);
+    }
+    return Math.min(maxDuration, Math.max(minDuration, rounded));
+  };
+  const commitDuration = (value: number) => {
+    onChangeSeedanceDuration?.(normalizeDurationInput(value));
+  };
+  const handleDurationInputBlur = () => {
+    if (durationInputDraft !== null) {
+      const value = Number(durationInputDraft);
+      if (Number.isFinite(value)) {
+        commitDuration(value);
+      } else {
+        onChangeSeedanceDuration?.(displayedDuration);
+      }
+    }
+    setDurationInputDraft(null);
+    onContinuousEditEnd?.();
+  };
+  const durationTip = allowedDurations
+    ? allowedDurationsAreContinuous
+      ? `整数秒，范围 ${allowedDurationMin}-${allowedDurationMax}。值越大视频越长、耗时越高。`
+      : `该模型仅支持 ${allowedDurations.join(' / ')} 秒，输入后会吸附到最近合法档位。`
+    : `整数秒，范围 ${minDuration}-${maxDuration}。值越大视频越长、耗时越高。`;
   const displayedResolution = seedanceResolutions.some((item) => item.value === seedanceResolution)
     ? seedanceResolution
     : seedanceCapability?.defaultResolution ?? seedanceResolution;
@@ -327,21 +378,6 @@ export default function VideoParamSelector({
   const displayedFrameRate = configuredFrameRates?.includes(videoFps)
     ? videoFps
     : generalModel?.videoCapability?.defaultFrameRate ?? configuredFrameRates?.[0] ?? videoFps;
-  // 标签按跨度等距抽样，保证数字之间有足够间距不重叠：
-  // 跨度 ≤8（如 4~12）每秒都标；≤16（如 4~15/4~20）每 2s 标一个；
-  // 更大（如 2.5 的 4~30）每 4s 标一个。端点 min/max 始终标。
-  const durationSpan = Math.max(1, maxDuration - minDuration);
-  const labelStep = durationSpan <= 8 ? 1 : durationSpan <= 16 ? 2 : 4;
-  const durationLabelValues = new Set<number>();
-  for (let v = minDuration; v <= maxDuration; v += labelStep) {
-    durationLabelValues.add(v);
-  }
-  durationLabelValues.add(maxDuration);
-  // 每一秒都保留一个等宽刻度槽，只隐藏中间文字；位置因此和原生 range 的步进严格一致。
-  const durationTicks = Array.from(
-    { length: Math.max(1, maxDuration - minDuration + 1) },
-    (_, index) => minDuration + index,
-  );
   const showResolutionControl = isNativeSeedance || customUsesResolution || !isWorkflowProvider;
   const showRatioControl = showSeedanceRatio && (isNativeSeedance || customUsesRatio || !isWorkflowProvider);
   // 所有视频模型都以秒数呈现；协议若需要帧数，由生成入口统一换算。
@@ -451,7 +487,7 @@ export default function VideoParamSelector({
                   <span>
                     参考帧
                     <span className="rh-tip" data-tooltip={`可选：指定某张图作为视频的首帧或尾帧，其余作为中间参考帧。不添加时按连线顺序交给模型。${referenceLimitTip ? `
-该模型：${referenceLimitTip}（连线带入的素材一并计数）。` : ''}`}>!</span>
+该模型：${referenceLimitTip}（连线带入的素材一并计数）。${videoReferenceFormatTip}` : ''}`}>!</span>
                   </span>
                   <button type="button" className="rh-video-ref-add" onClick={() => setPickerFor(pickerFor === 'frame' ? null : 'frame')}>
                     {pickerFor === 'frame' ? '取消' : '＋ 添加'}
@@ -625,55 +661,51 @@ export default function VideoParamSelector({
                   {showDurationControl && <div className="rh-vram-adv-row">
                     <div className="rh-vram-adv-label">
                       <span>生成时长（秒）</span>
-                      <span className="rh-tip" data-tooltip={allowedDurations
-                        ? `该模型仅支持 ${allowedDurations.join(' / ')} 秒。`
-                        : `整数秒，范围 ${minDuration}-${maxDuration}。值越大视频越长、耗时越高。`}>!</span>
+                      <span className="rh-tip" data-tooltip={durationTip}>!</span>
                     </div>
-                    {allowedDurations ? (
-                      <div className="flex flex-wrap gap-1.5">
-                        {allowedDurations.map((value) => (
-                          <button
-                            key={value}
-                            type="button"
-                            aria-pressed={displayedDuration === value}
-                            onClick={() => onChangeSeedanceDuration?.(value)}
-                            className={`min-h-7 rounded-full border px-3 py-1 text-[11px] leading-4 transition-colors ${
-                              displayedDuration === value
-                                ? 'border-blue-400/70 bg-blue-400/15 text-blue-200'
-                                : 'border-canvas-border text-canvas-text-secondary hover:border-blue-400/40 hover:text-canvas-text'
-                            }`}
-                          >
-                            {value}s
-                          </button>
-                        ))}
+                    <div className="rh-duration-control">
+                      <div className="rh-duration-slider">
+                        <div className="rh-duration-track">
+                          <div
+                            className="rh-duration-fill"
+                            style={{ width: `${durationFillPercent}%` }}
+                          />
+                          <input
+                            type="range"
+                            className="rh-duration-input"
+                            min={durationSliderMin}
+                            max={durationSliderMax}
+                            step={1}
+                            value={durationSliderValue}
+                            onChange={(e) => {
+                              const value = Number(e.target.value);
+                              commitDuration(durationSliderUsesIndexes ? allowedDurations?.[value] ?? displayedDuration : value);
+                              setDurationInputDraft(null);
+                            }}
+                            onBlur={onContinuousEditEnd}
+                          />
+                        </div>
                       </div>
-                    ) : (
-                    <div className="rh-duration-slider">
-                      <div className="rh-duration-track">
-                        <div
-                          className="rh-duration-fill"
-                          style={{ width: `${((displayedDuration - minDuration) / (maxDuration - minDuration)) * 100}%` }}
-                        />
+                      <label className="rh-duration-number">
                         <input
-                          type="range"
-                          className="rh-duration-input"
-                          min={minDuration}
-                          max={maxDuration}
+                          type="number"
+                          min={allowedDurationMin ?? minDuration}
+                          max={allowedDurationMax ?? maxDuration}
                           step={1}
-                          value={displayedDuration}
-                          onChange={(e) => onChangeSeedanceDuration?.(Number(e.target.value))}
-                          onBlur={onContinuousEditEnd}
+                          value={durationInputDraft ?? String(displayedDuration)}
+                          onChange={(e) => setDurationInputDraft(e.target.value)}
+                          onBlur={handleDurationInputBlur}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') e.currentTarget.blur();
+                            if (e.key === 'Escape') {
+                              setDurationInputDraft(null);
+                              e.currentTarget.blur();
+                            }
+                          }}
                         />
-                      </div>
-                      <div className="rh-duration-labels">
-                        {durationTicks.map((v) => (
-                          <span key={v} className={`rh-duration-tick ${displayedDuration >= v ? 'active' : ''}`} onClick={() => onChangeSeedanceDuration?.(v)}>
-                            {durationLabelValues.has(v) ? `${v}s` : ''}
-                          </span>
-                        ))}
-                      </div>
+                        <span>s</span>
+                      </label>
                     </div>
-                    )}
                   </div>}
 
 
@@ -806,34 +838,48 @@ export default function VideoParamSelector({
                       <span>生成时长（秒）</span>
                       <span className="rh-tip" data-tooltip={`整数秒，范围 ${minDuration}-${maxDuration}。提交时会根据帧率自动换算为模型需要的总帧数。`}>!</span>
                     </div>
-                    <div className="rh-duration-slider">
-                      <div className="rh-duration-track">
-                        <div
-                          className="rh-duration-fill"
-                          style={{ width: `${((displayedDuration - minDuration) / (maxDuration - minDuration)) * 100}%` }}
-                        />
+                    <div className="rh-duration-control">
+                      <div className="rh-duration-slider">
+                        <div className="rh-duration-track">
+                          <div
+                            className="rh-duration-fill"
+                            style={{ width: `${durationFillPercent}%` }}
+                          />
+                          <input
+                            type="range"
+                            className="rh-duration-input"
+                            min={durationSliderMin}
+                            max={durationSliderMax}
+                            step={1}
+                            value={durationSliderValue}
+                            onChange={(e) => {
+                              const value = Number(e.target.value);
+                              commitDuration(durationSliderUsesIndexes ? allowedDurations?.[value] ?? displayedDuration : value);
+                              setDurationInputDraft(null);
+                            }}
+                            onBlur={onContinuousEditEnd}
+                          />
+                        </div>
+                      </div>
+                      <label className="rh-duration-number">
                         <input
-                          type="range"
-                          className="rh-duration-input"
+                          type="number"
                           min={minDuration}
                           max={maxDuration}
                           step={1}
-                          value={displayedDuration}
-                          onChange={(e) => onChangeSeedanceDuration?.(Number(e.target.value))}
-                          onBlur={onContinuousEditEnd}
+                          value={durationInputDraft ?? String(displayedDuration)}
+                          onChange={(e) => setDurationInputDraft(e.target.value)}
+                          onBlur={handleDurationInputBlur}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') e.currentTarget.blur();
+                            if (e.key === 'Escape') {
+                              setDurationInputDraft(null);
+                              e.currentTarget.blur();
+                            }
+                          }}
                         />
-                      </div>
-                      <div className="rh-duration-labels">
-                        {durationTicks.map((value) => (
-                          <span
-                            key={value}
-                            className={`rh-duration-tick ${displayedDuration >= value ? 'active' : ''}`}
-                            onClick={() => onChangeSeedanceDuration?.(value)}
-                          >
-                            {durationLabelValues.has(value) ? `${value}s` : ''}
-                          </span>
-                        ))}
-                      </div>
+                        <span>s</span>
+                      </label>
                     </div>
                   </div>
                 </div>

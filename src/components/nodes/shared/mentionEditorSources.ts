@@ -5,6 +5,8 @@
  */
 import type { AppState } from '../../../store/useAppStore';
 import type { BaseNodeData, NodeType, StoryboardCellOverride, WorkflowIONodeType } from '../../../types';
+import { convertFileSrc } from '@tauri-apps/api/core';
+import { getCachedVideoPoster } from '../../../services/videoPosterCache';
 import { bestNodeThumb } from './mentionEditorDom';
 
 export interface CanvasMentionItem {
@@ -25,11 +27,49 @@ export interface WorkflowMentionItem {
   _ioType: WorkflowIONodeType;
 }
 
+function stringValue(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+const IS_TAURI = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+const IMAGE_URL_RE = /(?:^data:image\/|\.(?:png|jpe?g|webp|gif|bmp|svg)(?:[?#]|$))/i;
+
+function isImageUrl(url?: string): boolean {
+  return !!url && IMAGE_URL_RE.test(url);
+}
+
+function localAssetUrl(filePath?: string): string | undefined {
+  if (!filePath || !IS_TAURI) return undefined;
+  try {
+    return convertFileSrc(filePath);
+  } catch {
+    return undefined;
+  }
+}
+
+function videoPreviewUrl(data: BaseNodeData): string | undefined {
+  return stringValue(data.videoUrl)
+    || localAssetUrl(stringValue(data.filePath))
+    || stringValue(data.thumbnailUrl)
+    || stringValue(data.output)
+    || stringValue(data.sourceUrl);
+}
+
+function videoThumbnailUrl(nodeId: string, data: BaseNodeData): string | undefined {
+  const cachedPoster = getCachedVideoPoster(nodeId);
+  const explicitThumb = stringValue(data.thumbnailUrl);
+  if (cachedPoster) return cachedPoster;
+  if (isImageUrl(explicitThumb)) return explicitThumb;
+  return videoPreviewUrl(data);
+}
+
 export function resolveCanvasMentionNodes(
   nodeId: string | undefined,
   nodes: AppState['nodes'],
   edges: AppState['edges'],
+  posterRevision = 0,
 ): CanvasMentionItem[] {
+  void posterRevision;
   if (!nodeId) return [];
   const currentNode = nodes.find((node) => node.id === nodeId);
   const rawSourceIds = new Set(edges.filter((edge) => edge.target === nodeId).map((edge) => edge.source));
@@ -51,16 +91,23 @@ export function resolveCanvasMentionNodes(
 
   const list: CanvasMentionItem[] = nodes
     .filter((node) => node.id !== nodeId && node.type !== 'group' && sourceNodeIds.has(node.id))
-    .map((node) => ({
-      id: node.id,
-      label: (node.data.label as string) || '节点',
-      type: node.data.type,
-      displayId: node.data.displayId as number | undefined,
-      hasOutput: !!node.data.output,
-      outputType: node.data.imageUrl ? 'image' : node.data.videoUrl ? 'video' : node.data.audioUrl ? 'audio' : 'text',
-      thumbnailUrl: bestNodeThumb(node.data),
-      isSelf: false,
-    }));
+    .map((node) => {
+      const nodeType = (node.data.type || node.type) as NodeType;
+      const isVideoNode = nodeType === 'ai-video' || nodeType === 'source-video' || !!node.data.videoUrl;
+      const outputType = node.data.imageUrl ? 'image' : (node.data.videoUrl || isVideoNode) ? 'video' : node.data.audioUrl ? 'audio' : 'text';
+      return {
+        id: node.id,
+        label: (node.data.label as string) || '节点',
+        type: nodeType,
+        displayId: node.data.displayId as number | undefined,
+        hasOutput: !!node.data.output,
+        outputType,
+        thumbnailUrl: outputType === 'video'
+          ? videoThumbnailUrl(node.id, node.data)
+          : bestNodeThumb(node.data),
+        isSelf: false,
+      };
+    });
 
   const expanded: CanvasMentionItem[] = [];
   for (const item of list) {
@@ -93,15 +140,20 @@ export function resolveCanvasMentionNodes(
 
   if (currentNode && currentNode.type !== 'group') {
     const { output, imageUrl, videoUrl, audioUrl } = currentNode.data;
+    const currentNodeType = (currentNode.data.type || currentNode.type) as NodeType;
+    const currentIsVideoNode = currentNodeType === 'ai-video' || currentNodeType === 'source-video' || !!videoUrl;
+    const currentVideoUrl = videoPreviewUrl(currentNode.data);
     if ((typeof output === 'string' && output.trim()) || imageUrl || videoUrl || audioUrl) {
       expanded.unshift({
         id: currentNode.id,
         label: currentNode.data.label || '节点',
-        type: currentNode.data.type,
+        type: currentNodeType,
         displayId: currentNode.data.displayId,
         hasOutput: true,
-        outputType: imageUrl ? 'image' : videoUrl ? 'video' : audioUrl ? 'audio' : 'text',
-        thumbnailUrl: bestNodeThumb(currentNode.data),
+        outputType: imageUrl ? 'image' : (videoUrl || currentIsVideoNode) ? 'video' : audioUrl ? 'audio' : 'text',
+        thumbnailUrl: (videoUrl || currentIsVideoNode)
+          ? videoThumbnailUrl(currentNode.id, currentNode.data)
+          : bestNodeThumb(currentNode.data) || currentVideoUrl,
         isSelf: true,
       });
     }
