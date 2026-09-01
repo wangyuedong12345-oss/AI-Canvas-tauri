@@ -431,6 +431,11 @@ export default function App() {
       document.body.removeAttribute('data-sidebar-floating');
     }
   }, [effectiveFloating]);
+  useEffect(() => {
+    if (!isTauri) return;
+    document.documentElement.toggleAttribute('data-window-maximized', isMaximized);
+    return () => document.documentElement.removeAttribute('data-window-maximized');
+  }, [isMaximized]);
 
   const appContent = (
     <div

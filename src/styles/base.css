@@ -869,6 +869,24 @@ body[data-tauri-window][data-sidebar-floating][data-window-glass-frame] {
   --window-overlay-left: 35px;
 }
 
+/* 最大化时窗口必须贴合屏幕边缘，关闭自绘圆角与内容裁切，避免四角露出补色。 */
+html[data-window-maximized],
+html[data-window-maximized] body,
+html[data-window-maximized] #root {
+  border-radius: 0;
+}
+
+html[data-window-maximized] .app-shell,
+html[data-window-maximized] .app-shell--glass-frame {
+  --app-shell-content-radius: 0px;
+}
+
+html[data-window-maximized] .app-shell__content,
+html[data-window-maximized] .app-canvas-viewport {
+  border-radius: 0;
+  clip-path: none;
+}
+
 /* 性能模式使用系统矩形窗口边界，不保留自定义圆角、透明带和玻璃外框。 */
 html[data-performance-mode] .app-shell,
 html[data-performance-mode] .app-shell--glass-frame {
