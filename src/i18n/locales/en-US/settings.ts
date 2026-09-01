@@ -126,6 +126,7 @@ const settings = {
   '创建生成节点（文本 / 图像 / 视频 / 音频 / 全景 / 动画）': 'Create generation node (text / image / video / audio / panorama / animation)',
   '创建源节点（文本 / 图像 / 视频 / 音频 / Markdown）': 'Create source node (text / image / video / audio / Markdown)',
   '弹出对话框': 'Open dialog',
+  '环形菜单': 'Radial menu',
   '锁定比例缩放': 'Lock aspect ratio while scaling',
   '关闭菜单 / 设置': 'Close menu / settings',
   '画布复位': 'Reset canvas view',
