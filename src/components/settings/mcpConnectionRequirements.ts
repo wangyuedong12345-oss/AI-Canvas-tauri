@@ -3,7 +3,7 @@ import type { McpTransport } from '../../types/mcp';
 export const MCP_CONNECTION_REQUIREMENTS = [
   {
     icon: 'lucide:app-window',
-    title: 'AI Canvas 桌面端',
+    title: '桌面端',
     description: '软件需保持运行，并开启上方“本地控制会话”。',
   },
   {
@@ -26,7 +26,7 @@ export const MCP_CONNECTION_REQUIREMENTS = [
 export const MCP_HTTP_CONNECTION_REQUIREMENTS = [
   {
     icon: 'lucide:app-window',
-    title: 'AI Canvas 桌面端',
+    title: '桌面端',
     description: '软件需保持运行，并开启上方“远程控制会话”。',
   },
   {

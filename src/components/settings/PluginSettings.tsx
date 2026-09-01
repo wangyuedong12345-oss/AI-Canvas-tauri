@@ -39,7 +39,7 @@ const EXAMPLE_MANIFEST = JSON.stringify({
   id: 'com.ai-canvas.example-uppercase',
   name: '文本大写示例',
   version: '1.0.0',
-  author: 'AI Canvas',
+  author: 'ZeroFrame',
   description: '演示如何读取文本节点输出并写回结构化结果',
   category: 'content',
   keywords: ['文本', '示例'],
@@ -115,7 +115,7 @@ const PYTHON_EXAMPLE_MANIFEST = JSON.stringify({
   id: 'com.ai-canvas.example-python-uppercase',
   name: 'Python 文本大写示例',
   version: '1.0.0',
-  author: 'AI Canvas',
+  author: 'ZeroFrame',
   description: '演示可信 Python 插件读取文本节点并返回结构化结果',
   category: 'content',
   keywords: ['Python', '文本', '示例'],
@@ -143,7 +143,7 @@ const PYTHON_EXAMPLE_SOURCE = `def uppercase_output(input_value):
 define_plugin({"tools": {"python-uppercase-output": uppercase_output}})
 `;
 
-const PLUGIN_GUIDE_FILE_NAME = 'AI-Canvas-插件开发规范.md';
+const PLUGIN_GUIDE_FILE_NAME = 'ZeroFrame-插件开发规范.md';
 const MAX_DROPPED_PLUGIN_FILES = 256;
 
 interface PluginUploadFile {
@@ -810,7 +810,7 @@ export default function PluginSettings() {
       <ModalOverlay
         isOpen={guideOpen}
         onClose={() => setGuideOpen(false)}
-        ariaLabel="AI Canvas 插件开发规范"
+        ariaLabel="ZeroFrame 插件开发规范"
         className="h-[min(780px,calc(100vh-40px))] w-[min(920px,calc(100vw-40px))] border-canvas-border"
         motionPreset="quick"
       >
@@ -819,7 +819,7 @@ export default function PluginSettings() {
             <Icon icon="lucide:book-open-text" width={18} height={18} />
           </span>
           <div className="min-w-0 flex-1">
-            <h2 className="text-sm font-semibold text-canvas-text">AI Canvas 插件开发规范</h2>
+            <h2 className="text-sm font-semibold text-canvas-text">ZeroFrame 插件开发规范</h2>
             <p className="mt-0.5 text-[11px] text-canvas-text-muted">Plugin API v1 / v2 / v3 · 与当前插件运行时同步</p>
           </div>
           <AnimatedButton
