@@ -227,7 +227,7 @@ export default function OfficialProviderCard({
           </span>
           <span className="provider-connection-meta-inline">{modelCountSubtitle(status, catalogModels, t)}</span>
           <button type="button" className="official-provider-register-link" onClick={() => void openRegister()}>
-            {t('前往注册 ZEROFRAME')}
+            {t('前往获取API Key')}
             <Icon icon="mdi:open-in-new" width="12" />
           </button>
         </div>

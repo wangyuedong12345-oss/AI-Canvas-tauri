@@ -9,7 +9,7 @@ export const OFFICIAL_PROVIDER_ID = 'zeroframe-official';
 export const OFFICIAL_PROVIDER_NAME = '官方接口';
 export const OFFICIAL_PROVIDER_BADGE = 'ZF';
 export const OFFICIAL_MODELS_PATH = '/api/zeroframe/models';
-export const OFFICIAL_DEV_ORIGIN = 'http://localhost:3000';
+export const OFFICIAL_DEV_ORIGIN = 'https://daifly-test.cdyxi.com';
 export const OFFICIAL_DEV_BASE_URL = `${OFFICIAL_DEV_ORIGIN}/v1`;
 export const OFFICIAL_REGISTER_URL = import.meta.env.VITE_ZEROFRAME_REGISTER_URL
   || (import.meta.env.DEV ? OFFICIAL_DEV_ORIGIN : '');

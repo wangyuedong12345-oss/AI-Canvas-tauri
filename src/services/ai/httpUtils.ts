@@ -4,6 +4,22 @@
  * 提取自 generateImage / generateText 中重复的 `!response.ok → 解析 errorBody → throw` 样板。
  */
 
+function friendlyModelErrorMessage(message: string): string {
+  const requestId = /\bRequest id:\s*([A-Za-z0-9_-]+)/i.exec(message)?.[1];
+  const minimumPixels = /image size must be at least\s+(\d+)\s+pixels/i.exec(message)?.[1];
+  if (/\bparameter\s+`?size`?\s+specified in the request is not valid/i.test(message) && minimumPixels) {
+    const minimum = Number(minimumPixels);
+    const megapixels = Number.isFinite(minimum) ? minimum / 1_000_000 : 0;
+    const minimumText = Number.isFinite(minimum)
+      ? `${minimum.toLocaleString('zh-CN')} 像素${megapixels > 0 ? `（约 ${megapixels.toFixed(1)}MP）` : ''}`
+      : `${minimumPixels} 像素`;
+    return `当前模型不支持所选分辨率：图片总像素不能低于 ${minimumText}。`
+      + `请在图片节点里调高尺寸或选择更高画质后重试。`
+      + (requestId ? `请求 ID：${requestId}` : '');
+  }
+  return message;
+}
+
 /**
  * 解析 fetch 响应的错误信息并抛出。
  *
@@ -36,6 +52,7 @@ export async function parseResponseError(response: Response, defaultMsg: string)
   } catch {
     if (errorBody) errorMsg += `: ${errorBody.slice(0, 200)}`;
   }
+  errorMsg = friendlyModelErrorMessage(errorMsg);
   if (/\bapi[\s_-]*key\b/i.test(errorMsg)) {
     errorMsg += '（请确认使用模型 API Key，而非账户令牌；若密钥正确，请检查账户权限和积分余额）';
   }

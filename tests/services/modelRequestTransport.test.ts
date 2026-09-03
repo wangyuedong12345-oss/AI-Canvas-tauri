@@ -49,6 +49,18 @@ describe('model request transport boundary', () => {
     );
   });
 
+  it('explains image size validation errors with actionable resolution guidance', async () => {
+    const response = new Response(JSON.stringify({
+      error: {
+        message: 'The parameter `size` specified in the request is not valid: image size must be at least 3686400 pixels. Request id: 02178842988742238521d8aeb1173234c174f01c4d2f3c129826c',
+      },
+    }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+
+    await expect(parseResponseError(response, '图片生成失败 (400)')).rejects.toThrow(
+      '当前模型不支持所选分辨率：图片总像素不能低于 3,686,400 像素（约 3.7MP）。请在图片节点里调高尺寸或选择更高画质后重试。请求 ID：02178842988742238521d8aeb1173234c174f01c4d2f3c129826c',
+    );
+  });
+
   it('routes ordinary text generation through the shared transport', async () => {
     useAppStore.setState((state) => ({
       config: {
