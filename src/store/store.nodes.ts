@@ -237,6 +237,40 @@ function pruneDeletedNodesAndEmptyGroups(
   };
 }
 
+function pruneVideoReferencesForRemovedEdges(
+  nodes: Node<BaseNodeData>[],
+  removedEdges: readonly Edge[],
+): Node<BaseNodeData>[] {
+  if (removedEdges.length === 0) return nodes;
+  const removedByTarget = new Map<string, Set<string>>();
+  for (const edge of removedEdges) {
+    const sources = removedByTarget.get(edge.target) ?? new Set<string>();
+    sources.add(edge.source);
+    removedByTarget.set(edge.target, sources);
+  }
+
+  let changed = false;
+  const nextNodes = nodes.map((node) => {
+    const removedSources = removedByTarget.get(node.id);
+    const references = node.data.videoReferences;
+    if (!removedSources || !Array.isArray(references) || references.length === 0) return node;
+    const nextReferences = references.filter((reference) => {
+      const sourceNodeId = reference.sourceNodeId || reference.id;
+      return !removedSources.has(sourceNodeId);
+    });
+    if (nextReferences.length === references.length) return node;
+    changed = true;
+    return {
+      ...node,
+      data: {
+        ...node.data,
+        videoReferences: nextReferences.length > 0 ? nextReferences : undefined,
+      },
+    };
+  });
+  return changed ? nextNodes : nodes;
+}
+
 /** 渲染前剔除隐藏元素：角色库收纳的节点、已折叠分组的子节点，以及它们的连线 */
 export function filterHiddenCanvasElements(
   nodes: Node<BaseNodeData>[],
@@ -1102,6 +1136,16 @@ export const createNodeSlice: StateCreator<AppState, [], [], NodeSlice> = (set, 
     if (hasRemoval) get().commitToHistory();
     set((s) => ({
       edges: applyEdgeChanges(changes, s.edges) as Edge[],
+      nodes: pruneVideoReferencesForRemovedEdges(
+        s.nodes,
+        hasRemoval
+          ? changes.flatMap((change) => (
+              change.type === 'remove'
+                ? s.edges.find((edge) => edge.id === change.id) ?? []
+                : []
+            ))
+          : [],
+      ),
     }));
   },
 

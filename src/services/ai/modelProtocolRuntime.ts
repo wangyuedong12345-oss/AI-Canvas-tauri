@@ -1,7 +1,7 @@
 /** Model-level declarative protocol runtime with resumable async polling. */
 import { useAppStore } from '../../store/useAppStore';
 import type { GeneralModelCategory, GeneralModelConfig, NodeType } from '../../types';
-import type { ProtocolJsonValue, VideoModelCapability } from '../../types/aiTypes';
+import type { NormalizedModelExecutionProtocol, ProtocolJsonValue, VideoModelCapability } from '../../types/aiTypes';
 import {
   cleanupNodePolling,
   registerNodePolling,
@@ -111,6 +111,48 @@ function readBatchCount(value: ProtocolJsonValue | undefined): number {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
+function withSeedanceReferenceFallback(
+  protocol: NormalizedModelExecutionProtocol,
+  model: GeneralModelConfig,
+  variables: ModelProtocolVariables,
+): NormalizedModelExecutionProtocol {
+  const protocolSource = JSON.stringify(protocol);
+  const unusedReferences = findUnusedReferenceVariables(protocolSource, variables);
+  const fallbackFields: Record<string, string> = {};
+  if (unusedReferences.includes('firstImage') && readReferenceStrings(variables.firstImage).length > 0) {
+    fallbackFields.first_frame = '{{firstImage}}';
+  }
+  if (unusedReferences.includes('lastImage') && readReferenceStrings(variables.lastImage).length > 0) {
+    fallbackFields.last_frame = '{{lastImage}}';
+  }
+  if (
+    unusedReferences.includes('referenceImageUrls')
+    && readReferenceStrings(variables.referenceImageUrls).length > 0
+  ) {
+    fallbackFields.images = '{{referenceImageUrls}}';
+  }
+
+  if (
+    model.category !== 'video'
+    || !/seedance/i.test(`${model.name} ${model.modelId}`)
+    || !isRecord(protocol.submit.body)
+    || Object.keys(fallbackFields).length === 0
+  ) {
+    return protocol;
+  }
+
+  return {
+    ...protocol,
+    submit: {
+      ...protocol.submit,
+      body: {
+        ...protocol.submit.body,
+        ...fallbackFields,
+      },
+    },
+  };
 }
 
 function readReferenceStrings(value: unknown): string[] {
@@ -308,7 +350,10 @@ export function findModelProtocolForEachCapabilityConflicts(
 export async function runConfiguredModelProtocol(
   options: RunConfiguredModelProtocolOptions,
 ): Promise<string[]> {
-  const protocol = resolveModelExecutionProfile(options.model.executionProfile);
+  const resolvedProtocol = resolveModelExecutionProfile(options.model.executionProfile);
+  const protocol = resolvedProtocol
+    ? withSeedanceReferenceFallback(resolvedProtocol, options.model, options.variables)
+    : null;
   if (!protocol) throw new Error(`模型“${options.model.name}”未配置调用协议`);
   const expansionConflicts = findModelProtocolForEachCapabilityConflicts(
     protocol,

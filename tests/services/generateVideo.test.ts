@@ -1004,4 +1004,46 @@ describe('general video runtime safety', () => {
       duration: 30,
     });
   });
+
+  it('orders general video variables by manual first and last frame roles instead of add order', () => {
+    const variables = buildGeneralVideoProtocolVariables(
+      'vendor-video-model',
+      { provider: 'general', model: 'general/manual-frame-order-video', prompt: '按界面指定首尾帧生成' },
+      {
+        prompt: '按界面指定首尾帧生成',
+        imageUrls: [
+          'https://cdn.example/top-is-last.png',
+          'https://cdn.example/bottom-is-first.png',
+        ],
+        videoUrls: [],
+        audioUrls: [],
+        operation: 'image-to-video',
+        references: [
+          {
+            kind: 'image',
+            role: 'last_frame',
+            url: 'https://cdn.example/top-is-last.png',
+            origin: 'connection',
+          },
+          {
+            kind: 'image',
+            role: 'first_frame',
+            url: 'https://cdn.example/bottom-is-first.png',
+            origin: 'connection',
+          },
+        ],
+      },
+    );
+
+    expect(variables.imageUrls).toEqual([
+      'https://cdn.example/bottom-is-first.png',
+      'https://cdn.example/top-is-last.png',
+    ]);
+    expect(variables.firstImage).toBe('https://cdn.example/bottom-is-first.png');
+    expect(variables.lastImage).toBe('https://cdn.example/top-is-last.png');
+    expect(variables.imageWithRoles).toEqual([
+      { url: 'https://cdn.example/bottom-is-first.png', role: 'first_frame' },
+      { url: 'https://cdn.example/top-is-last.png', role: 'last_frame' },
+    ]);
+  });
 });

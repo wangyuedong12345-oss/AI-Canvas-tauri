@@ -1865,6 +1865,128 @@ describe('missing API key', () => {
 });
 
 describe('undeliverable reference media', () => {
+  it('为旧 Seedance 视频协议自动补齐普通参考图字段', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ data: [{ url: 'https://cdn.example/out.mp4' }] }));
+    vi.stubGlobal('fetch', fetchMock);
+    useAppStore.setState({
+      configHydrated: true,
+      config: {
+        ...useAppStore.getState().config,
+        providers: {
+          'official-relay': {
+            name: '官方接口', apiKey: 'k', baseUrl: 'https://daifly-test.cdyxi.com/v1',
+            catalogId: 'zeroframe-official', selectedModels: [],
+          },
+        },
+      },
+    } as never);
+    const model = {
+      id: 'Doubao-Seedance-2.0-mini',
+      name: 'Doubao-Seedance-2.0-mini',
+      modelId: 'doubao-seedance-2-0-mini-260615',
+      category: 'video' as const,
+      providerConfigId: 'official-relay',
+      executionProfile: {
+        preset: 'custom' as const,
+        protocol: {
+          version: 2 as const,
+          mode: 'sync' as const,
+          submit: {
+            method: 'POST' as const,
+            path: '/images/generations',
+            body: {
+              model: '{{model}}',
+              prompt: '{{prompt}}',
+              resolution: '{{seedanceResolution}}',
+              aspect_ratio: '{{aspectRatio}}',
+              duration: '{{seedanceDuration}}',
+              image: '{{imageUrls.0}}',
+            },
+          },
+          response: { type: 'json' as const, result: { urlPath: 'data.0.url' } },
+        },
+      },
+    };
+
+    await expect(runConfiguredModelProtocol({
+      model,
+      category: 'video',
+      variables: {
+        model: 'doubao-seedance-2-0-mini-260615',
+        prompt: '参考图片生成视频',
+        seedanceResolution: '720p',
+        aspectRatio: '16:9',
+        seedanceDuration: 5,
+        referenceImageUrls: ['https://cdn.example/ref.png'],
+      },
+    })).resolves.toEqual(['https://cdn.example/out.mp4']);
+
+    const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
+    expect(body.images).toEqual(['https://cdn.example/ref.png']);
+  });
+
+  it('为旧 Seedance 视频协议自动补齐首帧和尾帧字段', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ data: [{ url: 'https://cdn.example/out.mp4' }] }));
+    vi.stubGlobal('fetch', fetchMock);
+    useAppStore.setState({
+      configHydrated: true,
+      config: {
+        ...useAppStore.getState().config,
+        providers: {
+          'official-relay': {
+            name: '官方接口', apiKey: 'k', baseUrl: 'https://daifly-test.cdyxi.com/v1',
+            catalogId: 'zeroframe-official', selectedModels: [],
+          },
+        },
+      },
+    } as never);
+    const model = {
+      id: 'Doubao-Seedance-2.0-mini',
+      name: 'Doubao-Seedance-2.0-mini',
+      modelId: 'doubao-seedance-2-0-mini-260615',
+      category: 'video' as const,
+      providerConfigId: 'official-relay',
+      executionProfile: {
+        preset: 'custom' as const,
+        protocol: {
+          version: 2 as const,
+          mode: 'sync' as const,
+          submit: {
+            method: 'POST' as const,
+            path: '/images/generations',
+            body: {
+              model: '{{model}}',
+              prompt: '{{prompt}}',
+              resolution: '{{seedanceResolution}}',
+              aspect_ratio: '{{aspectRatio}}',
+              duration: '{{seedanceDuration}}',
+            },
+          },
+          response: { type: 'json' as const, result: { urlPath: 'data.0.url' } },
+        },
+      },
+    };
+
+    await expect(runConfiguredModelProtocol({
+      model,
+      category: 'video',
+      variables: {
+        model: 'doubao-seedance-2-0-mini-260615',
+        prompt: '首帧到尾帧的视频',
+        seedanceResolution: '720p',
+        aspectRatio: '16:9',
+        seedanceDuration: 5,
+        firstImage: 'https://cdn.example/first.png',
+        lastImage: 'https://cdn.example/last.png',
+        imageUrls: ['https://cdn.example/first.png', 'https://cdn.example/last.png'],
+      },
+    })).resolves.toEqual(['https://cdn.example/out.mp4']);
+
+    const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
+    expect(body.first_frame).toBe('https://cdn.example/first.png');
+    expect(body.last_frame).toBe('https://cdn.example/last.png');
+  });
+
   it('协议接不住参考素材时直接失败，并给出可抄的修法', async () => {
     useAppStore.setState({
       configHydrated: true,

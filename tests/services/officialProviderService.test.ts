@@ -75,6 +75,51 @@ describe('officialProviderService', () => {
     expect(merged[0]?.descriptionManual).toBe(true);
   });
 
+  it('为官方 Seedance 视频协议补齐普通参考图字段', () => {
+    const result = parseOfficialModels({
+      data: [{
+        id: 'Doubao-Seedance-2.0-mini',
+        name: 'Doubao-Seedance-2.0-mini',
+        type: 'video',
+        aiCanvas: {
+          executionProfile: {
+            preset: 'custom',
+            protocol: {
+              version: 2,
+              mode: 'async',
+              submit: {
+                method: 'POST',
+                path: '/videos/generations',
+                body: {
+                  model: '{{model}}',
+                  prompt: '{{prompt}}',
+                  resolution: '{{seedanceResolution}}',
+                  aspect_ratio: '{{aspectRatio}}',
+                  duration: '{{seedanceDuration}}',
+                },
+              },
+              response: { type: 'json', taskIdPath: 'id' },
+              poll: {
+                method: 'GET',
+                path: '/videos/{{submit.id}}',
+                response: {
+                  statusPath: 'status',
+                  successValues: ['succeeded'],
+                  failureValues: ['failed'],
+                  result: { urlPath: 'url' },
+                },
+              },
+            },
+          },
+        },
+      }],
+    });
+
+    expect(result.models[0]?.executionProfile?.protocol?.submit.body).toMatchObject({
+      images: '{{referenceImageUrls}}',
+    });
+  });
+
   it('拉取模型时使用官方端点和 Bearer Key', async () => {
     const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse({
       data: [{ id: 'DeepSeek-V4-flash', name: 'DeepSeek', type: 'text' }],

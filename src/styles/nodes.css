@@ -1163,15 +1163,33 @@
 }
 
 /* 全屏视频预览（hidePanel 模式） */
-.fullscreen-video-view {
+.fullscreen-video-stage {
+  position: relative;
+  width: 92vw;
+  height: 92vh;
   max-width: 92vw;
   max-height: 92vh;
-  width: auto;
-  height: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border-radius: 4px;
+  overflow: hidden;
   background: #000;
+}
+
+.fullscreen-video-view {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
   outline: none;
   animation: imgZoomIn 0.5s var(--ease-out-expo) both;
+}
+
+.fullscreen-video-stage .video-node-controls {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  pointer-events: auto;
 }
 
 @keyframes imgZoomIn {

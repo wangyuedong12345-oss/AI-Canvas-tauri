@@ -398,6 +398,10 @@ function AIVideoNode({ id, data, selected }: { id: string; data: BaseNodeData; s
     setIsFullscreen(false);
   }, [data.videoUrl]);
   const setFullscreenVideoElement = useCallback((video: HTMLVideoElement | null) => {
+    if (!video) {
+      fullscreenVideoRef.current = null;
+      return;
+    }
     if (fullscreenVideoRef.current && fullscreenVideoRef.current !== video) {
       releaseVideoElement(fullscreenVideoRef.current);
     }
@@ -881,19 +885,24 @@ function AIVideoNode({ id, data, selected }: { id: string; data: BaseNodeData; s
         hidePanel
         title={(data.label as string) || t('视频预览')}
         className="fullscreen-overlay--image-preview"
+        disableDragRegion
       >
         {isFullscreen && (data.videoUrl ? (
-          <video
-            ref={setFullscreenVideoElement}
-            src={data.videoUrl}
-            className="fullscreen-video-view"
-            controls
-            autoPlay
-            playsInline
-            crossOrigin="anonymous"
-            data-source-url={data.sourceUrl}
-            onLoadedMetadata={handleFullscreenLoadedMetadata}
-          />
+          <div className="fullscreen-video-stage nodrag nopan nowheel">
+            <video
+              ref={setFullscreenVideoElement}
+              src={data.videoUrl}
+              className="fullscreen-video-view"
+              playsInline
+              preload="auto"
+              data-source-url={data.sourceUrl}
+              onLoadedMetadata={handleFullscreenLoadedMetadata}
+            />
+            <VideoNodeControls
+              videoRef={fullscreenVideoRef}
+              source={data.videoUrl}
+            />
+          </div>
         ) : data.thumbnailUrl ? (
           <img
             src={data.thumbnailUrl}

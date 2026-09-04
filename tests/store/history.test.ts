@@ -667,6 +667,68 @@ describe('batch canvas history', () => {
     expect(useAppStore.getState().history).toEqual([]);
   });
 
+  it('removes video frame references when their incoming image edge is removed', async () => {
+    useAppStore.setState({
+      nodes: [
+        { ...node('image-a', { type: 'ai-image', imageUrl: 'asset://first.png' }), type: 'ai-image' },
+        { ...node('image-b', { type: 'ai-image', imageUrl: 'asset://last.png' }), type: 'ai-image' },
+        {
+          ...node('video-1', {
+            type: 'ai-video',
+            videoReferences: [
+              {
+                id: 'image-a',
+                kind: 'frame',
+                role: 'first_frame',
+                url: 'asset://first.png',
+                sourceNodeId: 'image-a',
+              },
+              {
+                id: 'image-b',
+                kind: 'frame',
+                role: 'last_frame',
+                url: 'asset://last.png',
+                sourceNodeId: 'image-b',
+              },
+              {
+                id: 'character:hero',
+                kind: 'character',
+                role: 'reference',
+                url: 'asset://hero.png',
+                label: '主角',
+              },
+            ],
+          }),
+          type: 'ai-video',
+        },
+      ],
+      edges: [
+        { id: 'edge-a-video', source: 'image-a', target: 'video-1' },
+        { id: 'edge-b-video', source: 'image-b', target: 'video-1' },
+      ],
+      history: [],
+      historyIndex: -1,
+    });
+
+    useAppStore.getState().onEdgesChange([{ type: 'remove', id: 'edge-a-video' }]);
+
+    const videoAfterRemove = useAppStore.getState().nodes.find((item) => item.id === 'video-1');
+    expect(useAppStore.getState().edges.map((item) => item.id)).toEqual(['edge-b-video']);
+    expect(videoAfterRemove?.data.videoReferences?.map((item) => item.id)).toEqual([
+      'image-b',
+      'character:hero',
+    ]);
+
+    await expect(useAppStore.getState().undo()).resolves.toBe(true);
+    const videoAfterUndo = useAppStore.getState().nodes.find((item) => item.id === 'video-1');
+    expect(useAppStore.getState().edges.map((item) => item.id)).toEqual(['edge-a-video', 'edge-b-video']);
+    expect(videoAfterUndo?.data.videoReferences?.map((item) => item.id)).toEqual([
+      'image-a',
+      'image-b',
+      'character:hero',
+    ]);
+  });
+
   it('undoes and redoes character-library node hiding with its association', async () => {
     useAppStore.setState({
       nodes: [node('character-image', { type: 'ai-image', imageUrl: 'asset://character.png' })],

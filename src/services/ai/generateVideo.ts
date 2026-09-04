@@ -116,6 +116,14 @@ function hasManualFrameRoles(items: readonly { role: string }[]): boolean {
   return items.some((item) => item.role === 'first_frame' || item.role === 'last_frame');
 }
 
+function orderReferencesByFrameRole(references: readonly MediaReference[]): MediaReference[] {
+  const rank = (role: MediaReferenceRole) => (role === 'first_frame' ? 0 : role === 'last_frame' ? 2 : 1);
+  return references
+    .map((reference, index) => ({ reference, index }))
+    .sort((a, b) => rank(a.reference.role) - rank(b.reference.role) || a.index - b.index)
+    .map((item) => item.reference);
+}
+
 /** 提示词点名了参考角色时附上「图N = 角色名」，否则模型不知道该照着哪张参考图画谁。 */
 export function annotateCharacterReferences(
   prompt: string,
@@ -144,13 +152,11 @@ function assignVideoReferenceRoles(references: readonly MediaReference[]): Media
   // 手动挑过参考帧：保留指派，其余降为普通参考图，并按 首帧 → 中间 → 尾帧 重排
   // （APIMart / 即梦 / 通用协议都只看图片顺序判断首尾帧）
   if (hasManualFrameRoles(references)) {
-    const rank = (role: MediaReferenceRole) => (role === 'first_frame' ? 0 : role === 'last_frame' ? 2 : 1);
-    return references
+    return orderReferencesByFrameRole(references
       .map((reference) => ({
         ...reference,
         role: reference.kind === 'audio' ? ('reference_audio' as const) : reference.role,
-      }))
-      .sort((a, b) => rank(a.role) - rank(b.role));
+      })));
   }
   const imageIndexes = references.flatMap((reference, index) => (
     reference.kind === 'image' ? [index] : []
@@ -212,9 +218,9 @@ async function resolveVideoReferenceInput(
   // 被全局规则偷偷改成 first_frame，否则 MetaSo 一类接口会把互斥模式混在一起。
   // 内置 Provider 暂时保留原有“按图片顺序推断首尾帧”的兼容行为。
   const references = options.preserveDeclaredRoles
-    ? collectedReferences.map((reference) => reference.kind === 'audio'
-      ? { ...reference, role: 'reference_audio' as const }
-      : reference)
+    ? orderReferencesByFrameRole(collectedReferences.map((reference) => reference.kind === 'audio'
+        ? { ...reference, role: 'reference_audio' as const }
+        : reference))
     : assignVideoReferenceRoles(collectedReferences);
   const imageUrls = getMediaReferenceUrls(references, 'image');
   const videoUrls = getMediaReferenceUrls(references, 'video');
@@ -313,12 +319,13 @@ export function buildGeneralVideoProtocolVariables(
   referenceInput: VideoGenerationReferenceInput,
   videoCapability?: VideoModelCapability,
 ): ModelProtocolVariables {
+  const references = orderReferencesByFrameRole(referencesFromLegacyInput(referenceInput));
   const canonical = resolveCanonicalVideoRequest({
     ...params,
     model: modelId,
     prompt: referenceInput.prompt,
   }, {
-    references: referencesFromLegacyInput(referenceInput),
+    references,
     capability: videoCapability,
   });
   return buildCanonicalVideoProtocolVariables(canonical);

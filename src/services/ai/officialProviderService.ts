@@ -40,6 +40,7 @@ interface OfficialModelPayload {
 }
 
 const MODEL_TYPES: GeneralModelCategory[] = ['text', 'image', 'video', 'audio'];
+const REFERENCE_IMAGE_PROTOCOL_RE = /{{\s*(?:referenceImageUrls|imageWithRoles|seedanceContent|imageUrls)\b/;
 
 export function isOfficialProviderId(providerId: string | undefined): boolean {
   return providerId === OFFICIAL_PROVIDER_ID;
@@ -69,6 +70,42 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
 }
 
+function normalizeOfficialExecutionProfile(
+  id: string,
+  name: string,
+  category: GeneralModelCategory,
+  executionProfile: ProviderModelSelection['executionProfile'],
+): ProviderModelSelection['executionProfile'] {
+  if (
+    category !== 'video'
+    || !/seedance/i.test(`${id} ${name}`)
+    || executionProfile?.preset !== 'custom'
+    || !isRecord(executionProfile.protocol)
+    || !isRecord(executionProfile.protocol.submit)
+    || !isRecord(executionProfile.protocol.submit.body)
+  ) {
+    return executionProfile;
+  }
+
+  if (REFERENCE_IMAGE_PROTOCOL_RE.test(JSON.stringify(executionProfile.protocol))) {
+    return executionProfile;
+  }
+
+  return {
+    ...executionProfile,
+    protocol: {
+      ...executionProfile.protocol,
+      submit: {
+        ...executionProfile.protocol.submit,
+        body: {
+          ...executionProfile.protocol.submit.body,
+          images: '{{referenceImageUrls}}',
+        },
+      },
+    },
+  } as ProviderModelSelection['executionProfile'];
+}
+
 function readPayloadModels(payload: unknown): unknown[] {
   if (Array.isArray(payload)) return payload;
   if (!isRecord(payload)) return [];
@@ -87,19 +124,22 @@ function parseOfficialModel(item: unknown): ProviderModelSelection | null {
 
   const id = payload.id.trim();
   const aiCanvas = isRecord(payload.aiCanvas) ? payload.aiCanvas : {};
+  const name = typeof payload.name === 'string' && payload.name.trim() ? payload.name.trim() : id;
+  const category = payload.type as GeneralModelCategory;
+  const executionProfile = isRecord(aiCanvas.executionProfile)
+    ? aiCanvas.executionProfile as unknown as ProviderModelSelection['executionProfile']
+    : undefined;
   return {
     id,
-    name: typeof payload.name === 'string' && payload.name.trim() ? payload.name.trim() : id,
-    category: payload.type as GeneralModelCategory,
+    name,
+    category,
     provider: OFFICIAL_PROVIDER_ID,
     description: typeof aiCanvas.description === 'string' ? aiCanvas.description : undefined,
     inputModalities: Array.isArray(aiCanvas.inputModalities)
       ? aiCanvas.inputModalities.filter((item): item is 'text' | 'image' => item === 'text' || item === 'image')
       : undefined,
     contextWindow: typeof aiCanvas.contextWindow === 'number' ? aiCanvas.contextWindow : undefined,
-    executionProfile: isRecord(aiCanvas.executionProfile)
-      ? aiCanvas.executionProfile as unknown as ProviderModelSelection['executionProfile']
-      : undefined,
+    executionProfile: normalizeOfficialExecutionProfile(id, name, category, executionProfile),
     imageReferenceRequestMode:
       aiCanvas.imageReferenceRequestMode === 'generation-json-image-urls'
       || aiCanvas.imageReferenceRequestMode === 'generation-json-image-data-urls'

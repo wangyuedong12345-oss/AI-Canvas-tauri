@@ -27,6 +27,7 @@ const STRUCTURAL_NODE_DATA_KEYS = [
   'hiddenByCharacterLibrary',
   'groupCollapsed',
   'note',
+  'videoReferences',
 ] as const satisfies readonly (keyof BaseNodeData)[];
 const LAYOUT_NODE_DATA_KEYS = [
   'nodeWidth',

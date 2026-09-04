@@ -111,10 +111,26 @@ describe('media preview memory guards', () => {
     expect(videoNodeSource).toMatch(
       /function releaseVideoElement[\s\S]*?removeAttribute\('src'\)[\s\S]*?video\.load\(\)/,
     );
+    expect(videoNodeSource).toMatch(
+      /const setFullscreenVideoElement = useCallback\(\(video: HTMLVideoElement \| null\) => \{[\s\S]*?if \(!video\) \{[\s\S]*?fullscreenVideoRef\.current = null;[\s\S]*?return;[\s\S]*?\}/,
+    );
     expect(videoNodeSource).toMatch(/const cleanup = \(\) => \{[\s\S]*?releaseVideoElement\(video\)/);
     expect(videoNodeSource).toMatch(
       /className="fullscreen-overlay--image-preview"[\s\S]*?ref=\{setFullscreenVideoElement\}/,
     );
+    expect(videoNodeSource).toMatch(
+      /<div className="fullscreen-video-stage nodrag nopan nowheel">[\s\S]*?<VideoNodeControls[\s\S]*?videoRef=\{fullscreenVideoRef\}/,
+    );
+    expect(videoNodeSource).not.toMatch(
+      /className="fullscreen-video-view"[\s\S]*?controls/,
+    );
+    expect(videoNodeSource).not.toMatch(
+      /className="fullscreen-video-view"[\s\S]*?crossOrigin="anonymous"/,
+    );
+    expect(videoNodeSource).toMatch(
+      /<FullscreenOverlay[\s\S]*?className="fullscreen-overlay--image-preview"[\s\S]*?disableDragRegion/,
+    );
+    expect(fullscreenOverlaySource).toContain('data-tauri-drag-region={disableDragRegion ? undefined : true}');
     expect(videoNodeSource).toContain('const VIDEO_FRAME_MAX_DIMENSION = 1280;');
     expect(videoNodeSource).toMatch(
       /async function captureVideoFrame[\s\S]*?fitVideoFrameDimensions\(video, VIDEO_FRAME_MAX_DIMENSION\)/,
@@ -148,6 +164,15 @@ describe('media preview memory guards', () => {
     expect(composerCssSource.match(/@keyframes composerRootBloom\s*\{[\s\S]*?\n\}/)?.[0]).not.toContain('filter:');
     expect(nodesCssSource).toMatch(
       /\.fullscreen-overlay--image-preview \.fullscreen-video-view\s*\{[^}]*animation:\s*none/s,
+    );
+    expect(nodesCssSource).toMatch(
+      /\.fullscreen-video-stage\s*\{(?=[^}]*width:\s*92vw)(?=[^}]*height:\s*92vh)[^}]*\}/s,
+    );
+    expect(nodesCssSource).toMatch(
+      /\.fullscreen-video-view\s*\{(?=[^}]*width:\s*100%)(?=[^}]*height:\s*100%)(?=[^}]*object-fit:\s*contain)[^}]*\}/s,
+    );
+    expect(nodesCssSource).toMatch(
+      /\.fullscreen-video-stage \.video-node-controls\s*\{(?=[^}]*opacity:\s*1)(?=[^}]*pointer-events:\s*auto)[^}]*\}/s,
     );
     expect(cameraStudioCssSource).toMatch(
       /\.fullscreen-overlay\.camera-studio-overlay\s*\{[^}]*backdrop-filter:\s*none/s,

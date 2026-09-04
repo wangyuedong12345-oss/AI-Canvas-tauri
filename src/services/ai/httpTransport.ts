@@ -198,9 +198,16 @@ function decodeBase64Body(value: string): Uint8Array {
   return Uint8Array.from(binary, (character) => character.charCodeAt(0));
 }
 
-function normalizeTransportError(error: unknown): Error {
+export function normalizeTransportError(error: unknown): Error {
   if (error instanceof Error) return error;
-  return new Error(typeof error === 'string' && error ? error : '原生 HTTP 请求失败');
+  const message = typeof error === 'string' && error ? error : '原生 HTTP 请求失败';
+  const failedUrl = /\burl \((https?:\/\/[^)]+)\)/i.exec(message)?.[1];
+  if (/请求失败:\s*error sending request/i.test(message) && failedUrl) {
+    return new Error(
+      `无法连接模型接口：${failedUrl}。请检查网络、接口地址、证书或服务是否可访问。原始错误：${message}`,
+    );
+  }
+  return new Error(message);
 }
 
 export async function corsSafeFetch(url: string, init: RequestInit = {}): Promise<Response> {

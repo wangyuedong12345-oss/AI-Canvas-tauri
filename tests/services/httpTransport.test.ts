@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { corsSafeFetch, logAiRequest } from '../../src/services/ai/httpTransport';
+import { corsSafeFetch, logAiRequest, normalizeTransportError } from '../../src/services/ai/httpTransport';
 
 const invokeMock = vi.hoisted(() => vi.fn());
 
@@ -48,6 +48,14 @@ beforeEach(() => {
 });
 
 describe('CORS-safe AI HTTP transport', () => {
+  it('explains native connection failures with endpoint troubleshooting guidance', () => {
+    expect(normalizeTransportError(
+      '请求失败: error sending request for url (https://daifly-test.cdyxi.com/v1/images/generations)',
+    ).message).toBe(
+      '无法连接模型接口：https://daifly-test.cdyxi.com/v1/images/generations。请检查网络、接口地址、证书或服务是否可访问。原始错误：请求失败: error sending request for url (https://daifly-test.cdyxi.com/v1/images/generations)',
+    );
+  });
+
   it('logs readable request parameters without exposing credentials or local media', () => {
     const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => undefined);
     const formData = new FormData();

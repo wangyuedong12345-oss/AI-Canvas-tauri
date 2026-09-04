@@ -27,6 +27,8 @@ export interface FullscreenOverlayProps {
   headerContent?: ReactNode;
   /** 关闭时立即卸载重媒体/Canvas 子树，不等待退场动画 */
   unmountOnClose?: boolean;
+  /** 让需要原生控件交互的预览避免被 Tauri 窗口拖拽区域拦截 */
+  disableDragRegion?: boolean;
 }
 
 const backdropVariants = {
@@ -71,6 +73,7 @@ export default function FullscreenOverlay({
   bodyClassName = '',
   headerContent,
   unmountOnClose = false,
+  disableDragRegion = false,
 }: FullscreenOverlayProps) {
   // Close on Escape release so child keydown handlers cannot swallow the shortcut.
   const handleKeyUp = useCallback(
@@ -89,7 +92,7 @@ export default function FullscreenOverlay({
 
   const overlay = isOpen ? (
         <motion.div
-          data-tauri-drag-region
+          data-tauri-drag-region={disableDragRegion ? undefined : true}
           className={`fullscreen-overlay${hidePanel ? ' fullscreen-overlay--transparent' : ''} ${className}`}
           variants={hidePanel ? backdropVariantsInstant : backdropVariants}
           initial="hidden"
