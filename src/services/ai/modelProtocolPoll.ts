@@ -86,6 +86,78 @@ function normalizeStatus(value: unknown): string {
   return typeof value === 'string' ? value.trim().toLowerCase() : String(value ?? '').toLowerCase();
 }
 
+const FALLBACK_POLL_ERROR_PATHS = {
+  code: ['error.code', 'code'],
+  message: ['error.message', 'message', 'fail_reason', 'failReason', 'reason', 'error'],
+  requestId: ['request_id', 'requestId', 'id'],
+};
+
+const SENSITIVE_CONTENT_MESSAGE_BY_CODE: Record<string, string> = {
+  InputTextSensitiveContentDetected: '输入的提示词可能包含敏感内容，已被模型服务驳回',
+  InputImageSensitiveContentDetected: '输入的参考图可能包含敏感内容，已被模型服务驳回',
+  'InputImageSensitiveContentDetected.PrivacyInformation': '输入的参考图可能包含真人或隐私信息，已被模型服务驳回',
+  'InputImageSensitiveContentDetected.PolicyViolation': '输入的参考图可能不符合平台内容策略，已被模型服务驳回',
+  InputVideoSensitiveContentDetected: '输入的视频可能包含敏感内容，已被模型服务驳回',
+  InputAudioSensitiveContentDetected: '输入的音频可能包含敏感内容，已被模型服务驳回',
+  OutputVideoSensitiveContentDetected: '生成结果可能包含敏感内容，已被模型服务驳回',
+  'OutputVideoSensitiveContentDetected.PolicyViolation': '生成结果可能不符合平台内容策略，已被模型服务驳回',
+  OutputAudioSensitiveContentDetected: '生成音频可能包含敏感内容，已被模型服务驳回',
+  'OutputAudioSensitiveContentDetected.PolicyViolation': '生成音频可能不符合平台内容策略，已被模型服务驳回',
+};
+
+const ENGLISH_MESSAGE_TRANSLATIONS: Array<[RegExp, string]> = [
+  [/input text may contain sensitive/i, '输入的提示词可能包含敏感内容，已被模型服务驳回'],
+  [/input image may contain privacy information/i, '输入的参考图可能包含真人或隐私信息，已被模型服务驳回'],
+  [/input image may contain sensitive/i, '输入的参考图可能包含敏感内容，已被模型服务驳回'],
+  [/input video may contain sensitive/i, '输入的视频可能包含敏感内容，已被模型服务驳回'],
+  [/input audio may contain sensitive/i, '输入的音频可能包含敏感内容，已被模型服务驳回'],
+  [/output video may contain sensitive/i, '生成结果可能包含敏感内容，已被模型服务驳回'],
+  [/output audio may contain sensitive/i, '生成音频可能包含敏感内容，已被模型服务驳回'],
+  [/policy violation/i, '内容可能不符合平台策略，已被模型服务驳回'],
+];
+
+function readFirstText(payload: ProtocolJsonValue, paths: string[]): string | undefined {
+  for (const path of paths) {
+    const value = readModelProtocolFirstScalar(payload, path);
+    if (value === undefined || value === null) continue;
+    const text = String(value).trim();
+    if (text) return text;
+  }
+  return undefined;
+}
+
+function localizePollFailureMessage(code: string | undefined, message: string | undefined): string | undefined {
+  if (code && SENSITIVE_CONTENT_MESSAGE_BY_CODE[code]) {
+    return SENSITIVE_CONTENT_MESSAGE_BY_CODE[code];
+  }
+  if (code?.includes('SensitiveContentDetected')) {
+    return '内容可能触发模型服务的安全审核，任务已被驳回';
+  }
+  if (!message) return undefined;
+  return ENGLISH_MESSAGE_TRANSLATIONS.find(([pattern]) => pattern.test(message))?.[1] || message;
+}
+
+function formatPollFailureDetail(
+  payload: ProtocolJsonValue,
+  configuredErrorPath: string | undefined,
+  status: string,
+): string {
+  const configured = configuredErrorPath
+    ? readFirstText(payload, [configuredErrorPath])
+    : undefined;
+
+  const code = readFirstText(payload, FALLBACK_POLL_ERROR_PATHS.code);
+  const message = configured || readFirstText(payload, FALLBACK_POLL_ERROR_PATHS.message);
+  const requestId = readFirstText(payload, FALLBACK_POLL_ERROR_PATHS.requestId);
+  const localizedMessage = localizePollFailureMessage(code, message);
+  const parts = [
+    localizedMessage,
+    code && code !== localizedMessage ? `错误码：${code}` : undefined,
+  ].filter(Boolean);
+  const detail = parts.length > 0 ? parts.join('；') : status;
+  return requestId ? `${detail}（Request ID: ${requestId}）` : detail;
+}
+
 export function getDefaultModelProtocolPollRetryConfig(): Required<ModelProtocolPollRetryConfig> {
   return {
     httpStatuses: [...DEFAULT_RETRY_HTTP_STATUSES],
@@ -271,8 +343,7 @@ export async function pollResolvedModelProtocol(
     isFailed: (payload) => {
       const status = normalizeStatus(readModelProtocolFirstScalar(payload, poll.statusPath));
       if (!failureValues.has(status)) return null;
-      const detail = poll.errorPath ? readModelProtocolFirstScalar(payload, poll.errorPath) : undefined;
-      return `模型任务失败：${detail || status}`;
+      return `模型任务失败：${formatPollFailureDetail(payload, poll.errorPath, status)}`;
     },
     interval: poll.intervalMs,
     maxAttempts: poll.maxAttempts,

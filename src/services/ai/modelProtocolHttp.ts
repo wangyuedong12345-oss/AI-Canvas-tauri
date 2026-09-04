@@ -35,6 +35,22 @@ function parseRetryAfterMs(value: string | null): number | undefined {
   return Math.max(0, timestamp - Date.now());
 }
 
+function localizeHttpErrorMessage(message: string): string {
+  const requestId = /\bRequest id:\s*([A-Za-z0-9_-]+)/i.exec(message)?.[1];
+  const withoutRequestId = message.replace(/\s*Request id:\s*[A-Za-z0-9_-]+\.?\s*$/i, '').trim();
+  const localized = ([
+    [/input text may contain sensitive/i, '输入的提示词可能包含敏感内容，已被模型服务驳回'],
+    [/input image may contain privacy information/i, '输入的参考图可能包含真人或隐私信息，已被模型服务驳回'],
+    [/input image may contain sensitive/i, '输入的参考图可能包含敏感内容，已被模型服务驳回'],
+    [/output image may contain sensitive/i, '生成结果可能包含敏感内容，已被模型服务驳回'],
+    [/input video may contain sensitive/i, '输入的视频可能包含敏感内容，已被模型服务驳回'],
+    [/output video may contain sensitive/i, '生成结果可能包含敏感内容，已被模型服务驳回'],
+    [/policy violation/i, '内容可能不符合平台策略，已被模型服务驳回'],
+  ] satisfies Array<[RegExp, string]>).find(([pattern]) => pattern.test(message))?.[1];
+  const detail = localized || withoutRequestId || message;
+  return requestId ? `${detail}（Request ID: ${requestId}）` : detail;
+}
+
 export async function readJsonResponse(
   response: Response,
   label: string,
@@ -61,9 +77,10 @@ export async function readJsonResponse(
     if (response.status === 429 && /no deployments available/i.test(message)) {
       throw new Error('所选模型暂无可用部署，请稍后手动重试（429）');
     }
+    const displayMessage = localizeHttpErrorMessage(message);
     throw new ModelProtocolHttpError(
       response.status,
-      `${label} (${response.status}): ${message}`,
+      `${label} (${response.status}): ${displayMessage}`,
       parseRetryAfterMs(response.headers.get('Retry-After')),
     );
   }

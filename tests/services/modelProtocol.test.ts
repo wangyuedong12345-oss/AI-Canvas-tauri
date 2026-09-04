@@ -1555,6 +1555,56 @@ describe('declarative model execution protocol', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
+  it('surfaces structured polling failure details when the protocol error path is missing', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse({
+      status: 'failed',
+      error: {
+        code: 'InputImageSensitiveContentDetected.PrivacyInformation',
+        message: 'The request failed because the input image may contain privacy information',
+      },
+      request_id: '02178842988742238521d8aeb1173234c174f01c4d2f3c129826c',
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(pollResolvedModelProtocol({
+      method: 'GET',
+      url: 'https://api.example/tasks/video-1',
+      statusPath: 'status',
+      successValues: ['completed'],
+      failureValues: ['failed'],
+      resultUrlPath: 'url',
+      intervalMs: 1,
+    }, 'secret', undefined, 'https://api.example/v1')).rejects.toThrow(
+      '模型任务失败：输入的参考图可能包含真人或隐私信息，已被模型服务驳回；错误码：InputImageSensitiveContentDetected.PrivacyInformation（Request ID: 02178842988742238521d8aeb1173234c174f01c4d2f3c129826c）',
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('localizes configured polling error messages while preserving the error code', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse({
+      status: 'failed',
+      error: {
+        code: 'InputTextSensitiveContentDetected',
+        message: 'The request failed because the input text may contain sensitive information',
+      },
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(pollResolvedModelProtocol({
+      method: 'GET',
+      url: 'https://api.example/tasks/video-1',
+      statusPath: 'status',
+      successValues: ['completed'],
+      failureValues: ['failed'],
+      resultUrlPath: 'url',
+      errorPath: 'error.message',
+      intervalMs: 1,
+    }, 'secret', undefined, 'https://api.example/v1')).rejects.toThrow(
+      '模型任务失败：输入的提示词可能包含敏感内容，已被模型服务驳回；错误码：InputTextSensitiveContentDetected',
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it('does not classify an HTTP business error message as a network transport error', async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(jsonResponse({ message: 'network error in upstream payload' }, 400))
@@ -1672,6 +1722,40 @@ describe('declarative model execution protocol', () => {
         fps: 24,
       },
     })).rejects.toThrow('暂无可用部署');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('localizes synchronous content moderation request failures', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse({
+      error: {
+        message: 'The request failed because the output image may contain sensitive information. Request id: 0217885024865312f9349bea7dcfdfeb5ceeba9779d3bab3a2f5e',
+      },
+    }, 400));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(executeModelProtocol({
+      apiKey: 'secret',
+      baseUrl: 'https://api.example/v1',
+      protocol: {
+        version: 2,
+        mode: 'sync',
+        submit: {
+          method: 'POST',
+          path: '/images/generations',
+          body: { prompt: '{{prompt}}' },
+        },
+        response: {
+          type: 'json',
+          result: { urlPath: 'data.0.url' },
+          errorPath: 'error.message',
+        },
+      },
+      variables: {
+        prompt: '敏感内容测试',
+      },
+    })).rejects.toThrow(
+      '模型请求失败 (400): 生成结果可能包含敏感内容，已被模型服务驳回（Request ID: 0217885024865312f9349bea7dcfdfeb5ceeba9779d3bab3a2f5e）',
+    );
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
