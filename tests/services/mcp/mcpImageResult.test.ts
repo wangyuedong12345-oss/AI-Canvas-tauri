@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-// 生产适配器是直接由 Node 执行的 ESM 脚本，不参与应用 TypeScript 构建。
-// @ts-expect-error JavaScript MCP 适配器没有独立声明文件
-import { toMcpToolResult } from '../../../scripts/ai-canvas-mcp.mjs';
+// MCP 适配器核心脚本是直接由 Node 执行的 ESM，不参与应用 TypeScript 构建。
+// @ts-expect-error JavaScript MCP 适配器核心没有独立声明文件
+import { toMcpToolResult } from '../../../scripts/ai-canvas-mcp-core.mjs';
 
 describe('MCP image result adapter', () => {
   it('preserves image content returned by AI Canvas', () => {

@@ -1,7 +1,18 @@
 import { Icon } from '@iconify/react';
-import { useState, type FormEvent } from 'react';
-import type { AvailableNodePluginTool, PluginJsonValue } from '../../../../types/plugin';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import type {
+  AvailableNodePluginTool,
+  PluginJsonValue,
+} from '../../../../types/plugin';
 import { executeNodePluginTool } from '../../../../services/plugins/pluginRuntime';
+import {
+  createPluginUiFrameSession,
+  type PluginUiFrameSession,
+} from '../../../../services/plugins/pluginUiSessionService';
+import {
+  buildPluginModelCatalog,
+  collectDeclaredModelCategories,
+} from '../../../../services/plugins/pluginModelCatalog';
 import { useAppStore } from '../../../../store/useAppStore';
 import AnimatedButton from '../../../shared/AnimatedButton';
 import ModalOverlay from '../../../shared/ModalOverlay';
@@ -25,49 +36,141 @@ function initialFormValues(pluginTool: AvailableNodePluginTool): Record<string, 
   return values;
 }
 
+function initialPluginParameters(pluginTool: AvailableNodePluginTool): Record<string, PluginJsonValue> {
+  const parameters: Record<string, PluginJsonValue> = {};
+  for (const field of pluginTool.tool.dialog?.fields ?? []) {
+    if (field.defaultValue === undefined) continue;
+    if (field.type === 'boolean') parameters[field.id] = field.defaultValue === true;
+    else if (field.type === 'number') parameters[field.id] = Number(field.defaultValue);
+    else parameters[field.id] = String(field.defaultValue);
+  }
+  return parameters;
+}
+
 export default function NodePluginToolDialog({ pluginTool, nodeId, onClose }: NodePluginToolDialogProps) {
   const showToast = useAppStore((state) => state.showToast);
+  const config = useAppStore((state) => state.config);
   const dialog = pluginTool.tool.dialog;
+  // 只有声明 models.read 的插件才拿得到模型目录，且目录不含任何厂商凭据。
+  const models = useMemo(
+    () => (pluginTool.permissions.includes('models.read')
+      ? buildPluginModelCatalog(
+        config,
+        collectDeclaredModelCategories(pluginTool.tool.dialog?.fields ?? []),
+      )
+      : []),
+    [config, pluginTool],
+  );
   const [values, setValues] = useState<Record<string, FormValue>>(() => initialFormValues(pluginTool));
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [frameSession, setFrameSession] = useState<PluginUiFrameSession | null>(null);
+  const [uiLoading, setUiLoading] = useState(Boolean(dialog?.ui));
+  const frameSessionRef = useRef<PluginUiFrameSession | null>(null);
+  const onCloseRef = useRef(onClose);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
+  useEffect(() => {
+    frameSession?.updateTheme(config.theme);
+  }, [config.theme, frameSession]);
+
+  useEffect(() => {
+    const exportName = dialog?.ui;
+    if (!exportName) return undefined;
+    let cancelled = false;
+    const plugin = useAppStore
+      .getState()
+      .installedPlugins.find((item) => item.id === pluginTool.pluginId);
+    if (!plugin) {
+      queueMicrotask(() => {
+        if (cancelled) return;
+        setUiLoading(false);
+        setFrameSession(null);
+        setError('找不到已安装的插件');
+      });
+      return () => {
+        cancelled = true;
+      };
+    }
+    void createPluginUiFrameSession({
+      plugin,
+      tool: pluginTool.tool,
+      nodeId,
+      exportName,
+      parameters: initialPluginParameters(pluginTool),
+      onClose: () => onCloseRef.current(),
+    }).then((session) => {
+      if (cancelled) {
+        session.dispose();
+        return;
+      }
+      frameSessionRef.current = session;
+      setFrameSession(session);
+      setError(null);
+      setUiLoading(false);
+    }).catch((cause) => {
+      if (cancelled) return;
+      setUiLoading(false);
+      setFrameSession(null);
+      const message = cause instanceof Error ? cause.message : '插件界面加载失败';
+      setError(message);
+      showToast(message, 'error');
+    });
+    return () => {
+      cancelled = true;
+      frameSessionRef.current?.dispose();
+      frameSessionRef.current = null;
+    };
+  }, [dialog?.ui, nodeId, pluginTool, showToast]);
 
   if (!dialog) return null;
 
   const close = () => {
-    if (!busy) onClose();
+    if (busy) return;
+    frameSessionRef.current?.dispose();
+    onClose();
   };
 
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  const collectParameters = (strict: boolean): Record<string, PluginJsonValue> | null => {
     const parameters: Record<string, PluginJsonValue> = {};
     for (const field of dialog.fields) {
       const value = values[field.id];
       if (field.type === 'boolean') {
-        if (field.required && value !== true) {
+        if (strict && field.required && value !== true) {
           setError(`请勾选“${field.label}”`);
-          return;
+          return null;
         }
         parameters[field.id] = value === true;
         continue;
       }
       const textValue = typeof value === 'string' ? value : '';
-      if (field.required && !textValue.trim()) {
+      if (strict && field.required && !textValue.trim()) {
         setError(`请填写“${field.label}”`);
-        return;
+        return null;
       }
       if (!textValue && !field.required) continue;
       if (field.type === 'number') {
         const numberValue = Number(textValue);
         if (!Number.isFinite(numberValue)) {
           setError(`“${field.label}”必须是有效数字`);
-          return;
+          return null;
         }
         parameters[field.id] = numberValue;
       } else {
         parameters[field.id] = textValue;
       }
     }
+    return parameters;
+  };
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    // 自定义 UI 下字段只充当初始值契约，必填校验交给插件视图自己处理。
+    const parameters = collectParameters(!dialog.ui);
+    if (!parameters) return;
 
     setError(null);
     setBusy(true);
@@ -84,6 +187,57 @@ export default function NodePluginToolDialog({ pluginTool, nodeId, onClose }: No
   };
 
   const inputClassName = 'mt-1.5 w-full rounded-lg border border-canvas-border bg-canvas-surface px-3 py-2 text-xs text-canvas-text outline-none transition-colors placeholder:text-canvas-text-muted focus:border-indigo-400/60 focus:ring-2 focus:ring-indigo-400/15';
+
+  if (dialog.ui) {
+    return (
+      <ModalOverlay
+        isOpen
+        onClose={close}
+        ariaLabel={dialog.title || pluginTool.tool.title}
+        className="w-[min(780px,calc(100vw-32px))] border-canvas-border"
+        closeOnBackdrop
+        motionPreset="quick"
+      >
+        <header className="flex items-center gap-3 border-b border-canvas-border px-4 py-3">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-400">
+            <Icon icon={pluginTool.tool.icon || 'lucide:blocks'} width={18} height={18} />
+          </span>
+          <div className="min-w-0 flex-1">
+            <h2 className="truncate text-sm font-semibold text-canvas-text">
+              {dialog.title || pluginTool.tool.title}
+            </h2>
+            <p className="mt-0.5 truncate text-[11px] text-canvas-text-muted">
+              {pluginTool.pluginName}
+            </p>
+          </div>
+          <PopupCloseButton onClick={close} />
+        </header>
+        <div className="h-[min(640px,calc(100vh-160px))] min-h-80 bg-canvas-surface">
+          {uiLoading && (
+            <div className="flex h-full items-center justify-center gap-2 text-xs text-canvas-text-secondary">
+              <Icon icon="lucide:loader-circle" width={16} height={16} className="animate-spin" />
+              正在加载插件界面…
+            </div>
+          )}
+          {!uiLoading && error && (
+            <div role="alert" className="m-4 rounded-lg border border-red-500/25 bg-red-500/10 px-3 py-2 text-xs leading-5 text-red-300">
+              {error}
+            </div>
+          )}
+          {frameSession && !error && (
+            <iframe
+              ref={(element) => frameSession.attach(element?.contentWindow ?? null)}
+              src={frameSession.src}
+              title={`${pluginTool.pluginName} · ${dialog.title || pluginTool.tool.title}`}
+              sandbox="allow-scripts"
+              referrerPolicy="no-referrer"
+              className="h-full w-full border-0 bg-canvas-surface"
+            />
+          )}
+        </div>
+      </ModalOverlay>
+    );
+  }
 
   return (
     <ModalOverlay
@@ -166,6 +320,24 @@ export default function NodePluginToolDialog({ pluginTool, nodeId, onClose }: No
                     >
                       <option value="">{field.placeholder || '请选择'}</option>
                       {field.options?.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                    </select>
+                  ) : field.type === 'model' ? (
+                    <select
+                      value={String(values[field.id] ?? '')}
+                      required={field.required}
+                      disabled={busy}
+                      className={inputClassName}
+                      onChange={(event) => {
+                        const nextValue = event.currentTarget.value;
+                        setValues((current) => ({ ...current, [field.id]: nextValue }));
+                      }}
+                    >
+                      <option value="">
+                        {models.length > 0 ? (field.placeholder || '选择可调用模型') : '暂无可调用模型'}
+                      </option>
+                      {models
+                        .filter((model) => !field.modelCategories || field.modelCategories.includes(model.category))
+                        .map((model) => <option key={model.id} value={model.id}>{model.name} · {model.category}</option>)}
                     </select>
                   ) : (
                     <input

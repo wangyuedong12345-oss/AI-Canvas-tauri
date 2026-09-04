@@ -112,7 +112,7 @@ describe('media preview memory guards', () => {
       /function releaseVideoElement[\s\S]*?removeAttribute\('src'\)[\s\S]*?video\.load\(\)/,
     );
     expect(videoNodeSource).toMatch(
-      /const setFullscreenVideoElement = useCallback\(\(video: HTMLVideoElement \| null\) => \{[\s\S]*?if \(!video\) \{[\s\S]*?fullscreenVideoRef\.current = null;[\s\S]*?return;[\s\S]*?\}/,
+      /const setFullscreenVideoElement = useCallback\(\(video: HTMLVideoElement \| null\) => \{[\s\S]*?if \(!video\) return;[\s\S]*?fullscreenVideoRef\.current = video;/,
     );
     expect(videoNodeSource).toMatch(/const cleanup = \(\) => \{[\s\S]*?releaseVideoElement\(video\)/);
     expect(videoNodeSource).toMatch(

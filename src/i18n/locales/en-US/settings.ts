@@ -25,10 +25,7 @@ const settings = {
   '使用系统默认指针': 'Use the system default cursor',
   '画布背景': 'Canvas background',
   '默认暗色': 'Default dark',
-  '太阳系': 'Solar system',
-  '星云': 'Nebula',
   '米白浅色': 'Off-white light',
-  '磨砂暖光': 'Frosted warm',
   '自定义图片': 'Custom image',
   '请选择图片文件': 'Please choose an image file',
   '背景图片处理失败': 'Failed to process the background image',
@@ -176,7 +173,6 @@ const settings = {
 
   // ── ApiKeySettings ──
   '添加 API 厂商': 'Add API provider',
-  '尚未添加 API 厂商': 'No API providers added yet',
   '添加厂商': 'Add provider',
   '当前环境无法保存凭据，API Key 不会写入本地，仅本次会话有效。':
     'Credentials cannot be saved in this environment; API keys are not written locally and are only valid for this session.',
@@ -279,7 +275,7 @@ const settings = {
   '复制前请把 <AI_CANVAS_IP> 替换为运行 AI Canvas 电脑的局域网 IP。不同客户端的 HTTP 配置字段可能略有差异。':
     'Before using the config, replace <AI_CANVAS_IP> with the LAN IP of the computer running AI Canvas. HTTP config fields may vary slightly between clients.',
   '连接环境要求': 'Connection requirements',
-  'AI Canvas 桌面端': 'AI Canvas desktop app',
+  '桌面端': 'Desktop app',
   '软件需保持运行，并开启上方“本地控制会话”。': 'Keep the app running and start the "local control session" above.',
   'Node.js 运行环境': 'Node.js runtime',
   '需已安装 Node.js，且系统可直接运行 node 命令。': 'Node.js must be installed and the node command must be directly runnable.',

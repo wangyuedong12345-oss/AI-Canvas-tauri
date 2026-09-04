@@ -4,7 +4,7 @@ import {
   LoopbackClient,
   parseCliArgs,
   toMcpToolResult,
-} from '../../scripts/ai-canvas-mcp.mjs';
+} from '../../scripts/ai-canvas-mcp-core.mjs';
 
 const TOKEN = 'ab'.repeat(32);
 const servers = [];

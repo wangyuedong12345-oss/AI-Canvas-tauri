@@ -14,7 +14,7 @@ import {
 describe('MCP control settings helpers', () => {
   it('lists the complete local connection environment requirements', () => {
     expect(MCP_CONNECTION_REQUIREMENTS.map((requirement) => requirement.title)).toEqual([
-      'AI Canvas 桌面端',
+      '桌面端',
       'Node.js 运行环境',
       '支持 MCP 的客户端',
       '在同一台电脑连接',
@@ -25,7 +25,7 @@ describe('MCP control settings helpers', () => {
   it('replaces local Node requirements with remote HTTP security requirements', () => {
     const requirements = getMcpConnectionRequirements('streamable-http');
     expect(requirements.map((requirement) => requirement.title)).toEqual([
-      'AI Canvas 桌面端',
+      '桌面端',
       '可达的局域网地址',
       '支持 Streamable HTTP',
       'Bearer Token 鉴权',

@@ -9,7 +9,7 @@
  */
 import { pollTask } from './pollTask';
 import { useAppStore } from '../store/useAppStore';
-import { downloadUrlAndSave } from './fileService';
+import { persistMediaUrlToProjectData } from './fileService';
 import { applyImageBatchResults } from './imageBatchService';
 import { mapImageDimensions } from './aiDimensions';
 import { parseMultiPathResponse, splitCommaSeparatedUrls } from './ai/helpers';
@@ -231,47 +231,30 @@ async function applyNodeResult(
   const nodeType = data.type;
   const currentProjectId = store.currentProjectId;
 
+  const persisted = currentProjectId
+    ? await persistMediaUrlToProjectData(resultUrl, currentProjectId, nodeType, nodeLabel)
+    : { mediaUrl: resultUrl, sourceUrl: resultUrl };
+  const mediaUrl = persisted.mediaUrl;
+
   const updateData: Partial<BaseNodeData> = {
-    output: resultUrl,
-    sourceUrl: resultUrl,
-    thumbnailUrl: resultUrl,
+    output: persisted.sourceUrl,
+    sourceUrl: persisted.sourceUrl,
+    filePath: persisted.filePath,
+    thumbnailUrl: mediaUrl,
     status: 'success',
   };
-  let historyFilePath: string | undefined;
-  let dramaMediaUrl = resultUrl;
+  let dramaMediaUrl = mediaUrl;
 
   if (nodeType === 'ai-image' || nodeType === 'ai-panorama') {
-    const saved = currentProjectId
-      ? await downloadUrlAndSave(resultUrl, currentProjectId, nodeType, nodeLabel).catch(() => null)
-      : null;
-    const mediaUrl = saved?.assetUrl || resultUrl;
     updateData.imageUrl = mediaUrl;
-    updateData.filePath = saved?.filePath;
-    historyFilePath = saved?.filePath;
     dramaMediaUrl = mediaUrl;
   } else if (nodeType === 'ai-video') {
-    updateData.videoUrl = resultUrl;
+    updateData.videoUrl = mediaUrl;
   } else if (nodeType === 'ai-audio') {
-    const saved = currentProjectId
-      ? await downloadUrlAndSave(resultUrl, currentProjectId, nodeType, nodeLabel).catch(() => null)
-      : null;
-    const mediaUrl = saved?.assetUrl || resultUrl;
     updateData.audioUrl = mediaUrl;
-    updateData.filePath = saved?.filePath;
-    historyFilePath = saved?.filePath;
   }
 
   store.updateNodeDataTransient(nodeId, updateData);
-  const savedVideo = nodeType === 'ai-video' && currentProjectId
-    ? await downloadUrlAndSave(resultUrl, currentProjectId, nodeType, nodeLabel).catch(() => null)
-    : null;
-  if (savedVideo?.assetUrl) {
-    store.updateNodeDataTransient(nodeId, {
-      videoUrl: savedVideo.assetUrl,
-      filePath: savedVideo.filePath,
-    });
-    historyFilePath = savedVideo.filePath;
-  }
   // 异步轮询完成的生图也要回写短剧资产绑图
   if (nodeType === 'ai-image' || nodeType === 'ai-panorama') {
     store.syncDramaAssetImageFromNode?.(nodeId, dramaMediaUrl);
@@ -281,13 +264,13 @@ async function applyNodeResult(
     nodeLabel,
     timestamp: Date.now(),
     prompt: (data.prompt as string) || '',
-    output: resultUrl,
+    output: persisted.sourceUrl,
     nodeType,
     model: (data.model as string) || '',
     provider: (data.provider as string) || '',
     status: 'success',
-    mediaUrl: resultUrl,
-    filePath: historyFilePath,
+    mediaUrl,
+    filePath: persisted.filePath,
   });
   store.showToast(`${nodeLabel} 生成已完成`);
 }

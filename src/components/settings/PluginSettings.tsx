@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import pluginDeveloperGuide from '../../../doc/插件开发规范.md?raw';
 import { isTauriEnv, saveBinaryToLocalFile } from '../../services/fileService';
+import { confirmAction } from '../../services/confirmDialog';
 import {
   comparePluginVersions,
   loadPluginMarketplace,
@@ -13,7 +14,12 @@ import { parsePluginManifest } from '../../services/plugins/pluginManifest';
 import { getPythonPluginRuntimeStatus } from '../../services/plugins/pluginRuntime';
 import { useAppStore } from '../../store/useAppStore';
 import { getNodeTypeConfig } from '../../types';
-import type { PluginCategory, PluginManifest, PythonPluginRuntimeStatus } from '../../types/plugin';
+import type {
+  PluginCategory,
+  PluginManifest,
+  PluginPackageResourcePayload,
+  PythonPluginRuntimeStatus,
+} from '../../types/plugin';
 import ChatMarkdown from '../chat/ChatMarkdown';
 import AnimatedButton from '../shared/AnimatedButton';
 import ModalOverlay from '../shared/ModalOverlay';
@@ -35,7 +41,7 @@ function isUpdateAvailable(latest: string, current: string): boolean {
 }
 
 const EXAMPLE_MANIFEST = JSON.stringify({
-  apiVersion: 2,
+  apiVersion: 1,
   id: 'com.ai-canvas.example-uppercase',
   name: '文本大写示例',
   version: '1.0.0',
@@ -110,7 +116,7 @@ const EXAMPLE_SOURCE = `definePlugin({
 });`;
 
 const PYTHON_EXAMPLE_MANIFEST = JSON.stringify({
-  apiVersion: 3,
+  apiVersion: 1,
   runtime: 'python',
   id: 'com.ai-canvas.example-python-uppercase',
   name: 'Python 文本大写示例',
@@ -156,8 +162,10 @@ const PLUGIN_PERMISSION_LABELS: Record<string, string> = {
   'node.write': '修改节点或创建插件节点',
   'models.read': '读取脱敏模型目录',
   'models.invoke': '调用可能产生费用的模型',
-  'files.read': '读取用户明确选择的文本文件',
-  'files.write': '通过保存窗口写出文本文件',
+  'files.connected.read': '读取当前节点及直接输入连线的项目资源',
+  'files.output.create': '在当前项目目录创建新的文本输出',
+  'plugin.resources.read': '读取当前插件 revision 声明的包资源',
+  'ui.custom': '在主窗口隔离弹窗中运行自定义界面代码（可能影响界面响应）',
 };
 
 function permissionSummary(manifest: PluginManifest): string {
@@ -179,25 +187,27 @@ async function reviewPluginInstall(
 ): Promise<string | null> {
   const sourceDigest = await computeSourceDigest(source);
   if (manifest.runtime !== 'python') return sourceDigest;
-  const confirmed = window.confirm(
+  const confirmed = await confirmAction(
     `${action}可信 Python 插件「${manifest.name}」？\n\n`
     + `来源：${sourceLabel}\n`
     + `代码 SHA-256：${sourceDigest}\n`
     + `宿主代办权限：${permissionSummary(manifest) || '无'}\n\n`
     + 'Python 插件会以你的当前系统权限运行，可以读取或修改本机文件、访问网络和环境变量，也可以启动其他程序。'
     + '\n\n只对你信任并已审查源码的插件继续。下一步 Rust 原生确认必须显示相同的完整摘要。',
+    { title: `${action}可信 Python 插件` },
   );
   return confirmed ? sourceDigest : null;
 }
 
-function confirmTrustedPythonEnable(manifest: PluginManifest, sourceDigest?: string): boolean {
+async function confirmTrustedPythonEnable(manifest: PluginManifest, sourceDigest?: string): Promise<boolean> {
   if (manifest.runtime !== 'python') return true;
-  return window.confirm(
+  return confirmAction(
     `启用可信 Python 插件「${manifest.name}」？\n\n`
     + `已登记代码 SHA-256：${sourceDigest ?? '旧记录待原生迁移'}\n`
     + `宿主代办权限：${permissionSummary(manifest) || '无'}\n\n`
     + '启用后插件会以你的当前系统权限运行，可以读取或修改本机文件、访问网络和环境变量，也可以启动其他程序。'
     + '\n\n继续后还必须通过 Rust 原生确认，且完整摘要应与这里一致。',
+    { title: '启用可信 Python 插件' },
   );
 }
 
@@ -250,6 +260,58 @@ async function droppedPluginFiles(dataTransfer: DataTransfer): Promise<PluginUpl
   const files: PluginUploadFile[] = [];
   for (const entry of entries) await collectDroppedEntry(entry, '', files);
   return files;
+}
+
+// ── Tauri 原生拖拽：外部拖入时 webview 的 DataTransfer 是空的，只能走全局事件 ──
+
+type PluginFsModule = typeof import('@tauri-apps/plugin-fs');
+
+/** 统一成正斜杠，Windows 拖拽路径可能带反斜杠 */
+function normalizePluginPath(path: string): string {
+  return path.replace(/\\/g, '/');
+}
+
+/** 声明了 ui 的插件必须同时带上界面产物，否则 Rust 侧会以「缺少界面产物」拒绝暂存。 */
+async function resolveUiSource(
+  files: PluginUploadFile[],
+  prefix: string,
+  manifest: PluginManifest,
+): Promise<string | undefined> {
+  if (!manifest.ui) return undefined;
+  const target = `${prefix}${manifest.ui.entry}`;
+  const found = files.find(({ path }) => path === target);
+  if (!found) throw new Error(`插件声明了自定义界面，但同级目录缺少 ${manifest.ui.entry}`);
+  return found.file.text();
+}
+
+async function resolveResourcePayloads(
+  files: PluginUploadFile[],
+  prefix: string,
+  manifest: PluginManifest,
+): Promise<PluginPackageResourcePayload[]> {
+  return Promise.all((manifest.resources ?? []).map(async (resource) => {
+    const target = `${prefix}${resource.path}`;
+    const found = files.find(({ path }) => path === target);
+    if (!found) throw new Error(`插件包缺少资源 ${resource.path}`);
+    if (found.file.size !== resource.bytes) throw new Error(`插件包资源 ${resource.path} 字节数不匹配`);
+    return { id: resource.id, bytes: Array.from(new Uint8Array(await found.file.arrayBuffer())) };
+  }));
+}
+
+async function collectPathFiles(
+  fs: PluginFsModule,
+  targetPath: string,
+  output: string[],
+): Promise<void> {
+  const info = await fs.stat(targetPath);
+  if (!info.isDirectory) {
+    output.push(targetPath);
+    return;
+  }
+  for (const entry of await fs.readDir(targetPath)) {
+    if (output.length >= MAX_DROPPED_PLUGIN_FILES) throw new Error('插件文件夹包含的文件过多');
+    await collectPathFiles(fs, `${targetPath.replace(/[\\/]+$/, '')}/${entry.name}`, output);
+  }
 }
 
 export default function PluginSettings() {
@@ -343,6 +405,8 @@ export default function PluginSettings() {
       await installPluginBundle(plugin.manifestText, plugin.source, {
         trustedPythonConfirmed: plugin.manifest.runtime === 'python',
         expectedSourceDigest: sourceDigest,
+        uiSource: plugin.uiSource,
+        resourcePayloads: plugin.resourcePayloads,
       });
       setRepositoryInput('');
       await refreshMarketplace(true);
@@ -393,11 +457,15 @@ export default function PluginSettings() {
       if (!entryFile) throw new Error(`manifest.json 同级目录缺少 ${manifest.entry}`);
       const action = plugins.some((installed) => installed.id === manifest.id) ? '更新' : '安装';
       const source = await entryFile.file.text();
+      const uiSource = await resolveUiSource(files, prefix, manifest);
+      const resourcePayloads = await resolveResourcePayloads(files, prefix, manifest);
       const sourceDigest = await reviewPluginInstall(manifest, source, action, '本地文件夹');
       if (!sourceDigest) return;
       await installPluginBundle(manifestText, source, {
         trustedPythonConfirmed: manifest.runtime === 'python',
         expectedSourceDigest: sourceDigest,
+        uiSource,
+        resourcePayloads,
       });
     } catch (error) {
       showToast(error instanceof Error ? error.message : '插件安装失败', 'error');
@@ -407,9 +475,84 @@ export default function PluginSettings() {
     }
   };
 
+  // Tauri 原生拖拽：全局事件只给出本机路径，需要自己把文件夹读出来
+  const installFromPaths = async (paths: string[]) => {
+    if (busy || paths.length === 0) return;
+    setBusy(true);
+    try {
+      const fs = await import('@tauri-apps/plugin-fs');
+      const filePaths: string[] = [];
+      for (const target of paths) await collectPathFiles(fs, target, filePaths);
+      const normalized = filePaths.map((raw) => ({ raw, path: normalizePluginPath(raw) }));
+      const manifests = normalized.filter(({ path }) => path.endsWith('/manifest.json'));
+      // 全局事件在窗口任何位置都会到达：不是插件包（例如拖到画布的素材）就静默忽略
+      if (manifests.length === 0) return;
+      if (manifests.length > 1) throw new Error('插件文件夹必须且只能包含一个 manifest.json');
+      const manifestFile = manifests[0];
+      const manifestText = new TextDecoder().decode(await fs.readFile(manifestFile.raw));
+      const manifest = parsePluginManifest(manifestText);
+      const prefix = manifestFile.path.slice(0, manifestFile.path.length - 'manifest.json'.length);
+      const entry = normalized.find(({ path }) => path === `${prefix}${manifest.entry}`);
+      if (!entry) throw new Error(`manifest.json 同级目录缺少 ${manifest.entry}`);
+      const action = plugins.some((installed) => installed.id === manifest.id) ? '更新' : '安装';
+      const source = new TextDecoder().decode(await fs.readFile(entry.raw));
+      const uiManifest = manifest.ui;
+      let uiSource: string | undefined;
+      if (uiManifest) {
+        const uiEntry = normalized.find(({ path }) => path === `${prefix}${uiManifest.entry}`);
+        if (!uiEntry) {
+          throw new Error(`插件声明了自定义界面，但同级目录缺少 ${uiManifest.entry}`);
+        }
+        uiSource = new TextDecoder().decode(await fs.readFile(uiEntry.raw));
+      }
+      const resourcePayloads = await Promise.all((manifest.resources ?? []).map(async (resource) => {
+        const entry = normalized.find(({ path }) => path === `${prefix}${resource.path}`);
+        if (!entry) throw new Error(`插件包缺少资源 ${resource.path}`);
+        const bytes = await fs.readFile(entry.raw);
+        if (bytes.byteLength !== resource.bytes) throw new Error(`插件包资源 ${resource.path} 字节数不匹配`);
+        return { id: resource.id, bytes: Array.from(bytes) };
+      }));
+      const sourceDigest = await reviewPluginInstall(manifest, source, action, '本地文件夹');
+      if (!sourceDigest) return;
+      await installPluginBundle(manifestText, source, {
+        trustedPythonConfirmed: manifest.runtime === 'python',
+        expectedSourceDigest: sourceDigest,
+        uiSource,
+        resourcePayloads,
+      });
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : '插件安装失败', 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // 监听器只注册一次，但始终调用最新闭包（busy / plugins）
+  const installFromPathsRef = useRef(installFromPaths);
+  useEffect(() => {
+    installFromPathsRef.current = installFromPaths;
+  });
+
+  useEffect(() => {
+    if (!isTauriEnv()) return;
+    let cancelled = false;
+    let unlisten: (() => void) | undefined;
+    void (async () => {
+      const { listen } = await import('@tauri-apps/api/event');
+      if (cancelled) return;
+      unlisten = await listen<{ paths: string[] }>('tauri://drag-drop', (event) => {
+        void installFromPathsRef.current(event.payload?.paths ?? []);
+      });
+    })();
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, []);
+
   const togglePlugin = async (plugin: (typeof plugins)[number]) => {
     const enabled = !plugin.enabled;
-    if (enabled && !confirmTrustedPythonEnable(plugin.manifest, plugin.sourceDigest)) return;
+    if (enabled && !(await confirmTrustedPythonEnable(plugin.manifest, plugin.sourceDigest))) return;
     await setPluginEnabled(plugin.id, enabled, {
       trustedPythonConfirmed: enabled && plugin.manifest.runtime === 'python',
     });
@@ -420,7 +563,10 @@ export default function PluginSettings() {
     setDragOver(false);
     if (busy) return;
     try {
-      await installFiles(await droppedPluginFiles(event.dataTransfer));
+      const files = await droppedPluginFiles(event.dataTransfer);
+      // Tauri 原生拖拽下 DataTransfer 是空的，交给全局事件处理，避免误报和重复安装
+      if (files.length === 0) return;
+      await installFiles(files);
     } catch (error) {
       showToast(error instanceof Error ? error.message : '无法读取插件文件夹', 'error');
     }
@@ -437,7 +583,7 @@ export default function PluginSettings() {
             </p>
           </div>
           <motion.div
-            className={`wf-dropzone mt-3${dragOver ? ' is-dragover' : ''}${busy ? ' pointer-events-none opacity-60' : ''}`}
+            className={`ui-dropzone mt-3${dragOver ? ' is-dragover' : ''}${busy ? ' pointer-events-none opacity-60' : ''}`}
             role="button"
             tabIndex={busy ? -1 : 0}
             aria-disabled={busy}
@@ -457,17 +603,17 @@ export default function PluginSettings() {
             onDrop={(event) => void handleDrop(event)}
             whileTap={busy ? undefined : { scale: 0.995 }}
           >
-            <span className="wf-dropzone-title">
+            <span className="ui-dropzone__title">
               {busy ? '正在校验并安装插件…' : '把插件文件夹拖到这里'}
             </span>
-            <span className="wf-dropzone-icon" aria-hidden="true">
+            <span className="ui-dropzone__icon" aria-hidden="true">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                 <polyline points="17 8 12 3 7 8" />
                 <line x1="12" y1="3" x2="12" y2="15" />
               </svg>
             </span>
-            <span className="wf-dropzone-hint">
+            <span className="ui-dropzone__hint">
               支持 manifest.json + main.js 或 main.py，点击这里也可以选择。
             </span>
           </motion.div>
@@ -787,9 +933,11 @@ export default function PluginSettings() {
                     aria-label={`卸载 ${plugin.manifest.name}`}
                     className="rounded-md p-1.5 text-canvas-text-muted hover:bg-red-500/10 hover:text-red-400"
                     onClick={() => {
-                      if (!window.confirm(`确定卸载插件「${plugin.manifest.name}」吗？`)) return;
-                      void deletePlugin(plugin.id).catch((error) => {
-                        showToast(error instanceof Error ? error.message : '插件卸载失败', 'error');
+                      void confirmAction(`确定卸载插件「${plugin.manifest.name}」吗？`, { title: '卸载插件' }).then((confirmed) => {
+                        if (!confirmed) return;
+                        void deletePlugin(plugin.id).catch((error) => {
+                          showToast(error instanceof Error ? error.message : '插件卸载失败', 'error');
+                        });
                       });
                     }}
                   >
@@ -820,7 +968,7 @@ export default function PluginSettings() {
           </span>
           <div className="min-w-0 flex-1">
             <h2 className="text-sm font-semibold text-canvas-text">ZeroFrame 插件开发规范</h2>
-            <p className="mt-0.5 text-[11px] text-canvas-text-muted">Plugin API v1 / v2 / v3 · 与当前插件运行时同步</p>
+            <p className="mt-0.5 text-[11px] text-canvas-text-muted">Plugin API v1 · 与当前插件运行时同步</p>
           </div>
           <AnimatedButton
             type="button"

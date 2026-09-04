@@ -2,83 +2,18 @@ import { Icon } from '@iconify/react';
 import { Handle, Position } from '@xyflow/react';
 import { memo, useMemo, useState } from 'react';
 import { useAppStore } from '../../store/useAppStore';
-import type { BaseNodeData, GeneralModelCategory, NodeType } from '../../types';
-import type {
-  PluginFileGrantSummary,
-  PluginJsonValue,
-  PluginModelSummary,
-} from '../../types/plugin';
-import {
-  defaultModelGroups,
-  getConfiguredModelGroups,
-  isProviderCategoryVisible,
-} from './shared/defaultModels';
-import { authorizePluginTextFile } from '../../services/plugins/pluginFileGrantService';
+import type { BaseNodeData } from '../../types';
+import type { PluginJsonValue } from '../../types/plugin';
+import { buildPluginModelCatalog } from '../../services/plugins/pluginModelCatalog';
 import {
   executePluginNode,
   getAvailablePluginNodes,
 } from '../../services/plugins/pluginRuntime';
 
-const CATEGORY_NODE_TYPES: Record<GeneralModelCategory, NodeType> = {
-  text: 'ai-text',
-  image: 'ai-image',
-  video: 'ai-video',
-  audio: 'ai-audio',
-};
-
-function modelCatalog(
-  config: ReturnType<typeof useAppStore.getState>['config'],
-  categories: GeneralModelCategory[],
-): PluginModelSummary[] {
-  const models = categories.flatMap((category) => {
-    const builtIn = getConfiguredModelGroups(
-      config,
-      CATEGORY_NODE_TYPES[category],
-      defaultModelGroups,
-      { filterSelectedModels: true },
-    ).flatMap((group) => group.models.map((model) => ({
-      id: model.value,
-      name: model.label,
-      provider: model.provider,
-      category,
-      description: model.description,
-      inputModalities: model.inputModalities,
-    })));
-    const general = (config.generalModels ?? [])
-      .filter((model) => (
-        model.category === category
-        && !!config.providers[model.providerConfigId]?.apiKey
-        && isProviderCategoryVisible(config, model.providerConfigId, category)
-      ))
-      .map((model) => ({
-        id: `general/${model.id}`,
-        name: model.name,
-        provider: 'general',
-        category,
-        description: model.description || `ID: ${model.modelId}`,
-        inputModalities: model.inputModalities,
-      }));
-    return [...builtIn, ...general];
-  });
-  return [...new Map(models.map((model) => [model.id, model])).values()];
-}
-
 function jsonRecord(value: unknown): Record<string, PluginJsonValue> {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? value as Record<string, PluginJsonValue>
     : {};
-}
-
-function fileSummary(value: PluginJsonValue | undefined): PluginFileGrantSummary | null {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
-  const record = value as Record<string, PluginJsonValue>;
-  if (typeof record.grantId !== 'string' || typeof record.displayName !== 'string') return null;
-  return {
-    grantId: record.grantId,
-    displayName: record.displayName,
-    size: typeof record.size === 'number' ? record.size : 0,
-    extension: typeof record.extension === 'string' ? record.extension : '',
-  };
 }
 
 function PluginNode({ id, data, selected }: { id: string; data: BaseNodeData; selected?: boolean }) {
@@ -102,7 +37,7 @@ function PluginNode({ id, data, selected }: { id: string; data: BaseNodeData; se
     [available],
   );
   const models = useMemo(
-    () => modelCatalog(config, categories),
+    () => buildPluginModelCatalog(config, categories),
     [categories, config],
   );
 
@@ -217,25 +152,7 @@ function PluginNode({ id, data, selected }: { id: string; data: BaseNodeData; se
                     .filter((model) => field.modelCategories?.includes(model.category))
                     .map((model) => <option key={model.id} value={model.id}>{model.name} · {model.category}</option>)}
                 </select>
-              ) : field.type === 'file' ? (() => {
-                const file = fileSummary(value);
-                return (
-                  <button
-                    type="button"
-                    className={`${baseClass} text-left hover:bg-canvas-hover`}
-                    onClick={async () => {
-                      try {
-                        const next = await authorizePluginTextFile(available.pluginId, id);
-                        if (next) setValue(field.id, next as unknown as PluginJsonValue);
-                      } catch (error) {
-                        showToast(error instanceof Error ? error.message : '文件授权失败', 'error');
-                      }
-                    }}
-                  >
-                    {file ? `${file.displayName} · ${Math.max(1, Math.ceil(file.size / 1024))} KB` : (field.placeholder || '选择并授权文本文件')}
-                  </button>
-                );
-              })() : (
+              ) : (
                 <input
                   className={baseClass}
                   type={field.type === 'number' ? 'number' : 'text'}

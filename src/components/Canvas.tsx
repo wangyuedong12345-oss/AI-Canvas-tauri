@@ -47,6 +47,7 @@ import HistoryTimelinePanel from './canvas/HistoryTimelinePanel';
 import SelectedNodeFlowEdge from './canvas/SelectedNodeFlowEdge';
 import ScissorHoverEdge from './canvas/ScissorHoverEdge';
 import CanvasRadialMenu, { CanvasLongPressIndicator } from './canvas/CanvasRadialMenu';
+import NodePluginToolDialog from './nodes/shared/toolbar/NodePluginToolDialog';
 import { useConnectionDropMenu } from '../hooks/useConnectionDropMenu';
 import { useCanvasContextMenu } from '../hooks/useCanvasContextMenu';
 import { useNodeContextMenu } from '../hooks/useNodeContextMenu';
@@ -709,6 +710,8 @@ function CanvasInner() {
     showAddToCharacter,
     pluginTools,
     handlePluginTool,
+    pendingPluginTool,
+    closePluginToolDialog,
   } = useNodeContextMenu();
   const isGroupNode = nodeCtxMenu.nodeId
     ? nodes.find((n) => n.id === nodeCtxMenu.nodeId && n.type === 'group') != null
@@ -1470,6 +1473,14 @@ function CanvasInner() {
         pluginTools={pluginTools}
         onPluginTool={handlePluginTool}
       />
+
+      {pendingPluginTool ? (
+        <NodePluginToolDialog
+          pluginTool={pendingPluginTool.tool}
+          nodeId={pendingPluginTool.nodeId}
+          onClose={closePluginToolDialog}
+        />
+      ) : null}
 
       {characterCaptureNodeId ? createPortal(
         <Suspense fallback={null}>

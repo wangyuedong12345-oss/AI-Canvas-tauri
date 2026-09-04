@@ -17,6 +17,7 @@ use url::Url;
 
 mod agent_package;
 mod assistant_web;
+#[cfg_attr(not(windows), allow(dead_code, unused_imports))]
 mod blender_runtime;
 mod clipboard;
 mod comfyui;
@@ -25,6 +26,7 @@ mod dreamina;
 mod file_transfer;
 mod local_fonts;
 mod mcp_bridge;
+mod model_mirror;
 #[cfg(feature = "local-onnx")]
 pub mod onnx;
 #[cfg(not(feature = "local-onnx"))]
@@ -93,10 +95,24 @@ pub mod onnx {
     ) -> Result<String, String> {
         unsupported()
     }
+
+    #[tauri::command]
+    pub async fn speech_to_text(
+        _app: tauri::AppHandle,
+        _webview: tauri::Webview,
+        _input_path: String,
+        _model_name: String,
+        _vocab_name: String,
+        _task_id: String,
+        _language: Option<String>,
+    ) -> Result<String, String> {
+        unsupported()
+    }
 }
 mod path_policy;
 mod plugin_registry;
 mod plugin_runtime;
+mod plugin_ui;
 mod project_archive;
 mod provider_docs;
 mod secret_store;
@@ -1050,6 +1066,7 @@ pub fn run() {
         .manage(mcp_bridge::McpBridgeState::default())
         .manage(path_policy::UserStorageRoot::default())
         .register_uri_scheme_protocol("director-desk", director_desk_runtime::handle_protocol)
+        .register_uri_scheme_protocol("plugin-ui", plugin_ui::handle_protocol)
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
@@ -1112,6 +1129,7 @@ pub fn run() {
             onnx::check_model_exists,
             onnx::image_upscale,
             onnx::subject_matting,
+            onnx::speech_to_text,
             onnx::character_direction_grid,
             sprite_export::export_sprite_frames,
             onnx::download_onnx_model,
@@ -1131,6 +1149,7 @@ pub fn run() {
             plugin_registry::set_plugin_registration_enabled,
             plugin_registry::remove_plugin_registration,
             plugin_registry::get_plugin_registration_status,
+            plugin_registry::read_plugin_package_resource,
             plugin_runtime::execute_node_plugin_tool,
             plugin_runtime::get_python_plugin_runtime_status,
         ])

@@ -70,7 +70,7 @@ const common = {
   '画布助手': 'Canvas assistant',
 
   // ── 关于弹窗 ──
-  '关于 AI Canvas': 'About AI Canvas',
+  '关于 ZeroFrame': 'About ZeroFrame',
   '开发预览版': 'Developer Preview',
   '检查更新': 'Check for updates',
   '检查中...': 'Checking…',
@@ -81,18 +81,14 @@ const common = {
   '发现 v{version}，点击更新': 'v{version} available — click to update',
   '检查失败，请稍后重试': 'Check failed, please try again later',
   '下载失败，请稍后重试': 'Download failed, please try again later',
-  'AI Canvas 是一个智能多媒体创意画布，通过可视化节点编排的方式，调用多种 AI 模型来生成文本、图像、视频和音频内容。支持多厂商模型接入、ComfyUI 工作流、本地文件管理与实时协作。':
-    'AI Canvas is a multimedia creative canvas that orchestrates AI models through visual nodes to generate text, images, video and audio. It supports multi-vendor model providers, ComfyUI workflows, local file management and real-time collaboration.',
+  'ZeroFrame 是一个智能多媒体创意画布，通过可视化节点编排的方式，调用多种 AI 模型来生成文本、图像、视频和音频内容。支持多厂商模型接入、ComfyUI 工作流、本地文件管理与实时协作。':
+    'ZeroFrame is a multimedia creative canvas that orchestrates AI models through visual nodes to generate text, images, video and audio. It supports multi-vendor model providers, ComfyUI workflows, local file management and real-time collaboration.',
   '核心能力': 'Capabilities',
   '技术栈': 'Tech stack',
-  '社区': 'Community',
   'ComfyUI 工作流': 'ComfyUI workflows',
   '节点分组管理': 'Node grouping',
   '画布无限缩放': 'Infinite canvas zoom',
   '本地文件读写': 'Local file access',
-  'QQ 群：873354155': 'QQ group: 873354155',
-  '点击复制 QQ 群号': 'Click to copy the QQ group number',
-  '已复制 QQ 群号：873354155': 'QQ group number copied: 873354155',
 };
 
 export default common;

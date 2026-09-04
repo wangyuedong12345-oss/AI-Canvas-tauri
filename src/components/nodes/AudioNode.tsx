@@ -10,6 +10,8 @@ import GooeyBtn from './shared/GooeyBtn';
 import { useNodeRename } from './shared/useNodeRename';
 import { useSourceFileUpload } from './shared/useSourceFileUpload';
 import AudioNodeToolbar from './shared/AudioNodeToolbar';
+import { useAudioNodeAsr } from './shared/audio/useAudioNodeAsr';
+import ModelDownloadDialog from '../shared/ModelDownloadDialog';
 import { generateId, useAppStore } from '../../store/useAppStore';
 import { copyFile as copyFileToClipboard } from '../../services/clipboardService';
 import { useCompletionFlash } from '../../hooks/useCompletionFlash';
@@ -170,6 +172,7 @@ function AIAudioNode({ id, data, selected }: { id: string; data: BaseNodeData; s
   const t = useT();
   const justCompleted = useCompletionFlash(data.status);
   const updateNodeData = useAppStore((s) => s.updateNodeData);
+  const updateNodeDataTransient = useAppStore((s) => s.updateNodeDataTransient);
   const isSingleSelection = useAppStore((s) => s.selectedNodeIds.length <= 1);
   const isSource = data.role === 'source';
 
@@ -221,7 +224,7 @@ function AIAudioNode({ id, data, selected }: { id: string; data: BaseNodeData; s
       if (!liveSource || liveStore.currentProjectId !== projectId) return;
 
       const newNodeId = `node-${generateId()}`;
-      const sourceWidth = Number(liveSource.data.nodeWidth) || 260;
+      const sourceWidth = Number(liveSource.data.nodeWidth) || 280;
       const estimatedLines = transcript.split(/\r?\n/).reduce(
         (count, line) => count + Math.max(1, Math.ceil(line.length / 36)),
         0,
@@ -261,6 +264,17 @@ function AIAudioNode({ id, data, selected }: { id: string; data: BaseNodeData; s
       setIsTranscribing(false);
     }
   }, [id, t]);
+
+  // ── 本地语音转文本（SenseVoice ONNX）──
+  const {
+    isTranscribing: isAsrRunning,
+    progress: asrProgress,
+    downloadPrompt,
+    isDownloadingModel,
+    handleSpeechToText,
+    handleDownloadConfirm,
+    handleDownloadCancel,
+  } = useAudioNodeAsr({ id, data, t, updateNodeDataTransient });
 
   // ── Reset when URL changes ──
   useEffect(() => {
@@ -411,7 +425,7 @@ function AIAudioNode({ id, data, selected }: { id: string; data: BaseNodeData; s
 
   // ── Render ──
   return (
-    <div className="node-wrapper" style={{ width: 260 }} onContextMenu={(e) => e.preventDefault()}>
+    <div className="node-wrapper" style={{ width: 280 }} onContextMenu={(e) => e.preventDefault()}>
       <NodeLabel
         kind="ai-audio"
         label={displayLabel}
@@ -426,8 +440,11 @@ function AIAudioNode({ id, data, selected }: { id: string; data: BaseNodeData; s
             nodeId={id}
             isPlaying={isPlaying}
             isTranscribing={isTranscribing}
+            isAsrRunning={isAsrRunning}
+            asrProgress={asrProgress}
             onTogglePlay={togglePlay}
             onTranscribe={handleTranscribe}
+            onSpeechToText={handleSpeechToText}
             onUpload={handleUpload}
             onCopyFile={handleCopyFile}
           />
@@ -513,6 +530,14 @@ function AIAudioNode({ id, data, selected }: { id: string; data: BaseNodeData; s
           <GooeyBtn className="gooey-btn-right" hue={30} />
         </Handle>
       </div>
+      {/* 语音识别模型下载弹窗（Portal → body，与超分一致） */}
+      <ModelDownloadDialog
+        type="asr"
+        showPrompt={downloadPrompt}
+        showDownloading={isDownloadingModel}
+        onConfirm={handleDownloadConfirm}
+        onCancel={handleDownloadCancel}
+      />
     </div>
   );
 }
